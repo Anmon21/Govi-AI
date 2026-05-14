@@ -47,7 +47,10 @@ Plans:
   2. Running `curl /content/{id}` returns the correct title and body text for a vault file with that frontmatter ID
   3. Vault files missing `enabled: true` in their frontmatter are not served and do not appear in content listings
   4. Running `curl -X POST /content/reload` re-reads vault files from disk and reflects edits made since startup — no server restart required
-**Plans:** TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Wave 0: install python-frontmatter + pytest, add `vault_path` config field, write failing tests for VAULT-01/02/03 + reload endpoint + extended /health
+- [ ] 02-02-PLAN.md — Wave 1 (vault slice): create `app/routers/content.py` with loader + GET /{id} + POST /reload, extend /health with vault_loaded + content_count, wire lifespan in main.py, document VAULT_PATH
 
 ### Phase 3: Product Q&A Flow
 **Mode:** mvp
@@ -92,7 +95,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Security + Bot Foundation | 0/3 | Not started | - |
-| 2. Vault Service | 0/TBD | Not started | - |
+| 2. Vault Service | 0/2 | Not started | - |
 | 3. Product Q&A Flow | 0/TBD | Not started | - |
 | 4. Human Escalation | 0/TBD | Not started | - |
 | 5. Polish + Hardening | 0/TBD | Not started | - |
