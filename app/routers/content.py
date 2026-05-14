@@ -1,8 +1,9 @@
 import logging
 import os
+from typing import Optional
 import yaml
 import frontmatter
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.config import settings
@@ -19,6 +20,16 @@ class ContentResponse(BaseModel):
     type: str
     title: str
     body: str
+
+
+class ContentListItem(BaseModel):
+    id: str
+    type: str
+    title: str
+
+
+class ContentListResponse(BaseModel):
+    items: list[ContentListItem]
 
 
 def load_vault() -> dict[str, dict]:
@@ -55,14 +66,37 @@ def load_vault() -> dict[str, dict]:
             logger.warning("Skipping %s: missing required string fields (type, title)", entry.name)
             continue
 
+        category_value = meta.get("category")
+        if category_value is not None and (not isinstance(category_value, str) or not category_value):
+            logger.warning("Skipping %s: 'category' present but not a non-empty string", entry.name)
+            continue
+
         result[content_id] = {
             "id": content_id,
             "type": meta["type"],
             "title": meta["title"],
+            "category": category_value,
             "body": post.content,
         }
 
     return result
+
+
+@router.get("", response_model=ContentListResponse)
+async def list_content(
+    type: str = Query("", description="Required. Filter by item type, e.g. 'category' or 'question'."),
+    category: Optional[str] = Query(None, description="Optional. When type='question', restrict to a category id."),
+):
+    if not type:
+        raise HTTPException(status_code=400, detail="type query parameter is required")
+    items = [
+        ContentListItem(id=item["id"], type=item["type"], title=item["title"])
+        for item in _vault.values()
+        if item["type"] == type
+        and (category is None or item.get("category") == category)
+    ]
+    items.sort(key=lambda i: i.id)
+    return ContentListResponse(items=items)
 
 
 @router.get("/{content_id}", response_model=ContentResponse)
