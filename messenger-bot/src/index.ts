@@ -8,9 +8,8 @@ const app = express();
 const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN!;
 const PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN!;
 const GOVI_AI_URL = process.env.GOVI_AI_URL ?? "http://localhost:8000";
-const APP_SECRET = process.env.FACEBOOK_APP_SECRET; // optional — skip verification if absent
 
-if (!APP_SECRET) {
+if (!process.env.FACEBOOK_APP_SECRET) {
   console.warn("FACEBOOK_APP_SECRET not set — skipping webhook signature verification");
 }
 
