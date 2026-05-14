@@ -462,12 +462,13 @@ def test_health_shows_vault_stats(tmp_path):
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where does `vault_loaded` mean?**
    - What we know: D-03 says if VAULT_PATH is missing, serve zero content. Health should reflect this.
    - What's unclear: Should `vault_loaded: false` mean "no path configured" vs "path configured but empty"? Both result in `content_count: 0`.
    - Recommendation: `vault_loaded = settings.vault_path != "" and os.path.isdir(settings.vault_path)` — reflects whether the vault is reachable, not whether it has content. This gives operators an actionable distinction.
+   - RESOLVED: `vault_loaded = settings.vault_path != "" and os.path.isdir(settings.vault_path)`
 
 ---
 

@@ -2,7 +2,7 @@
 phase: 02
 slug: vault-service
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-05-14
 ---
@@ -41,8 +41,11 @@ created: 2026-05-14
 | 2-01-01 | 01 | 0 | VAULT-01 | — | N/A | unit | `grep -q 'vault_path' app/config.py && echo OK` | ❌ W0 | ⬜ pending |
 | 2-01-02 | 01 | 0 | VAULT-01 | — | N/A | integration | `python -m pytest tests/test_content.py -q` | ❌ W0 | ⬜ pending |
 | 2-01-03 | 01 | 0 | VAULT-02 | — | N/A | integration | `python -m pytest tests/test_content.py::test_get_content_by_id -q` | ❌ W0 | ⬜ pending |
-| 2-01-04 | 01 | 0 | VAULT-03 | — | N/A | integration | `python -m pytest tests/test_content.py::test_disabled_not_served -q` | ❌ W0 | ⬜ pending |
-| 2-01-05 | 01 | 0 | VAULT-01 | — | N/A | integration | `python -m pytest tests/test_health.py::test_health_vault_stats -q` | ❌ W0 | ⬜ pending |
+| 2-01-04 | 01 | 0 | VAULT-03 | — | N/A | integration | `python -m pytest tests/test_content.py::test_disabled_files_excluded -q` | ❌ W0 | ⬜ pending |
+| 2-01-05 | 01 | 0 | VAULT-01 | — | N/A | integration | `python -m pytest tests/test_health.py::test_health_includes_vault_stats -q` | ❌ W0 | ⬜ pending |
+| 2-02-01 | 02 | 1 | VAULT-01, VAULT-02, VAULT-03, QA-04 | T-2-01, T-2-02 | yaml.YAMLError caught; strict bool; top-level scan only | integration | `python -m pytest tests/test_content.py tests/test_health.py -q` | ❌ W1 | ⬜ pending |
+| 2-02-02 | 02 | 1 | VAULT-01 | T-2-03 | vault_loaded reflects reachability | integration | `python -m pytest tests/test_content.py tests/test_health.py -q` | ❌ W1 | ⬜ pending |
+| 2-02-03 | 02 | 1 | VAULT-01 | — | lifespan clear/update pattern used | integration | `python -m pytest tests/test_content.py tests/test_health.py -q` | ❌ W1 | ⬜ pending |
 
 ---
 

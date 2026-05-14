@@ -87,7 +87,7 @@
 | QA-01 | Phase 3 | Category menu via quick replies |
 | QA-02 | Phase 3 | Question sub-menu |
 | QA-03 | Phase 3 | Answer delivery from vault |
-| QA-04 | Phase 3 | POST /content/reload — admin hot-reload |
+| QA-04 | Phase 2 | POST /content/reload — admin hot-reload |
 | ESC-01 | Phase 4 | "Contact Human" entry point |
 | ESC-02 | Phase 4 | Admin Messenger notification |
 | ESC-03 | Phase 4 | Handover Protocol thread transfer |
