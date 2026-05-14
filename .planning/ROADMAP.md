@@ -33,9 +33,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. A Graph API send failure (Facebook returns an error body in a 200 response) is logged with message and response data — PAGE_ACCESS_TOKEN does not appear in any log output
 **Plans:** 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Wave 0: test runner wiring, node_modules cleanup, .env.example update, failing test scaffolds (SEC-01/02/03 + CORE-01/02/03/04)
-- [ ] 01-02-PLAN.md — Wave 1 (security slice): HMAC webhook verification (SEC-01), Graph API error detection (SEC-02), safe error logging (SEC-03), v21.0 bump
-- [ ] 01-03-PLAN.md — Wave 2 (navigation slice): Messenger Profile setup (CORE-02), Get Started welcome (CORE-01), quick replies (CORE-03), free-text fallback with quick-reply guard (CORE-04)
+- [x] 01-01-PLAN.md — Wave 0: test runner wiring, node_modules cleanup, .env.example update, failing test scaffolds (SEC-01/02/03 + CORE-01/02/03/04)
+- [x] 01-02-PLAN.md — Wave 1 (security slice): HMAC webhook verification (SEC-01), Graph API error detection (SEC-02), safe error logging (SEC-03), v21.0 bump
+- [x] 01-03-PLAN.md — Wave 2 (navigation slice): Messenger Profile setup (CORE-02), Get Started welcome (CORE-01), quick replies (CORE-03), free-text fallback with quick-reply guard (CORE-04)
 
 ### Phase 2: Vault Service
 **Mode:** mvp
