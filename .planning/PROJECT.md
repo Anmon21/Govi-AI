@@ -22,14 +22,15 @@ Customers can get instant product answers and reach a human through Messenger �
 - [ ] Rule-based menu system in the Messenger bot (replace current AI-passthrough)
 - [ ] Product Q&A flow — customers can ask product questions via menus
 - [ ] Human escalation flow — notify admin on Facebook Page inbox
-- [ ] Admin panel — web UI to create, edit, delete Q&A content (questions + answers)
-- [ ] Q&A content storage — persist managed content (database or file-based)
+- [ ] Obsidian vault integration — FastAPI backend reads Q&A content from Obsidian markdown files at a configured local vault path
+- [ ] Q&A content format — structured markdown files in Obsidian vault define questions, answers, and menu flows
 
 ### Out of Scope
 
 - Order tracking / order status — no store backend connected
 - AI-powered free-text responses — using rule-based menus only
 - Shopify / WooCommerce integration — standalone system
+- Custom admin web UI — Obsidian vault is the content management interface
 - Multi-language support — English only for v1
 
 ## Context
@@ -51,9 +52,10 @@ The new direction replaces the AI-passthrough with structured menu flows for cus
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Rule-based menus over AI | User requirement — deterministic, easier to manage | — Pending |
-| Admin panel for content | User doesn't want to edit code to update Q&A | — Pending |
-| Keep FastAPI backend | Already exists, well-structured, good for admin API | — Pending |
+| Rule-based menus over AI | Deterministic, easier to manage than LLM responses | — Pending |
+| Obsidian as content store | User already uses Obsidian — no custom admin UI needed | — Pending |
+| Local file path vault access | Simplest integration — FastAPI reads markdown directly | — Pending |
+| Keep FastAPI backend | Already exists, well-structured, serves as content API layer | — Pending |
 | Notify admin via Messenger | Simplest human handoff — no extra tooling needed | — Pending |
 
 ## Evolution
