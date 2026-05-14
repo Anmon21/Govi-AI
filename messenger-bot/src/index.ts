@@ -130,9 +130,12 @@ export async function sendMessage(recipientId: string, text: string, quickReplie
       console.error("Graph API error:", response.data.error.message, response.data.error);
     }
   } catch (err: unknown) {
-    const axiosErr = err as import("axios").AxiosError;
     // SEC-03: Never log the full axios error object (contains PAGE_ACCESS_TOKEN in config.url)
-    console.error("sendMessage failed:", axiosErr.message, axiosErr.response?.data);
+    if (axios.isAxiosError(err)) {
+      console.error("sendMessage failed:", err.message, err.response?.data);
+    } else {
+      console.error("sendMessage failed (unexpected error):", err);
+    }
   }
 }
 
@@ -215,8 +218,11 @@ export async function setupMessengerProfile(): Promise<void> {
     );
     console.log("Messenger profile configured");
   } catch (err: unknown) {
-    const axiosErr = err as import("axios").AxiosError;
-    console.error("Messenger profile setup failed:", axiosErr.message, axiosErr.response?.data);
+    if (axios.isAxiosError(err)) {
+      console.error("Messenger profile setup failed:", err.message, err.response?.data);
+    } else {
+      console.error("Messenger profile setup failed (unexpected error):", err);
+    }
   }
 }
 
