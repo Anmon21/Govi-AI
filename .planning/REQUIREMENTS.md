@@ -72,26 +72,24 @@
 
 ## Traceability
 
-*Populated by roadmap after ROADMAP.md is created*
-
 | REQ-ID | Phase | Notes |
 |--------|-------|-------|
-| CORE-01 | — | — |
-| CORE-02 | — | — |
-| CORE-03 | — | — |
-| CORE-04 | — | — |
-| SEC-01 | — | — |
-| SEC-02 | — | — |
-| SEC-03 | — | — |
-| VAULT-01 | — | — |
-| VAULT-02 | — | — |
-| VAULT-03 | — | — |
-| QA-01 | — | — |
-| QA-02 | — | — |
-| QA-03 | — | — |
-| QA-04 | — | — |
-| ESC-01 | — | — |
-| ESC-02 | — | — |
-| ESC-03 | — | — |
-| ESC-04 | — | — |
-| POLISH-01 | — | — |
+| CORE-01 | Phase 1 | Get Started postback — bot skeleton |
+| CORE-02 | Phase 1 | Persistent menu — bot skeleton |
+| CORE-03 | Phase 1 | Quick reply navigation — bot skeleton |
+| CORE-04 | Phase 1 | Free-text fallback — bot skeleton |
+| SEC-01 | Phase 1 | HMAC signature fix — blocking security issue |
+| SEC-02 | Phase 1 | Graph API error detection fix — blocking security issue |
+| SEC-03 | Phase 1 | Token leak fix in error logging — blocking security issue |
+| VAULT-01 | Phase 2 | Vault startup load via VAULT_PATH |
+| VAULT-02 | Phase 2 | Content served by frontmatter ID |
+| VAULT-03 | Phase 2 | Frontmatter schema + enabled discovery |
+| QA-01 | Phase 3 | Category menu via quick replies |
+| QA-02 | Phase 3 | Question sub-menu |
+| QA-03 | Phase 3 | Answer delivery from vault |
+| QA-04 | Phase 3 | POST /content/reload — admin hot-reload |
+| ESC-01 | Phase 4 | "Contact Human" entry point |
+| ESC-02 | Phase 4 | Admin Messenger notification |
+| ESC-03 | Phase 4 | Handover Protocol thread transfer |
+| ESC-04 | Phase 4 | Last message included in admin notification |
+| POLISH-01 | Phase 5 | Typing indicator during vault fetch |

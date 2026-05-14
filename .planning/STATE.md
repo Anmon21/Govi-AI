@@ -1,0 +1,71 @@
+# Project State
+
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-05-14)
+
+**Core value:** Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates
+**Current focus:** Phase 1 — Security + Bot Foundation
+
+## Current Position
+
+Phase: 1 of 5 (Security + Bot Foundation)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-05-14 — Roadmap created; all 19 v1 requirements mapped across 5 phases
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: —
+- Total execution time: —
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+**Recent Trend:**
+- Last 5 plans: —
+- Trend: —
+
+*Updated after each plan completion*
+
+## Accumulated Context
+
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- [Init]: Rule-based menus over AI — deterministic, easier to manage
+- [Init]: Obsidian vault as content store — no custom admin UI needed
+- [Init]: Keep existing Node.js + FastAPI two-service split unchanged
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+- [Phase 1]: Webhook signature fix requires `express.raw()` before `express.json()` — middleware order matters
+- [Phase 4]: Admin PSID requires admin to have messaged the Page at least once from their personal account — document as required setup step
+- [Phase 2]: Verify `python-frontmatter` current version on PyPI before pinning (training knowledge may be stale)
+
+## Deferred Items
+
+| Category | Item | Status | Deferred At |
+|----------|------|--------|-------------|
+| v2 | "Was this helpful?" quick reply after answers | Deferred | Init |
+| v2 | Answer length truncation + "Read more" link | Deferred | Init |
+| v2 | Returning user memory / greet by name | Deferred | Init |
+
+## Session Continuity
+
+Last session: 2026-05-14
+Stopped at: Roadmap written; STATE.md initialized; REQUIREMENTS.md traceability updated
+Resume file: None
