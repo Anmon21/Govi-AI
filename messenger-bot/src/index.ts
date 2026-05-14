@@ -109,6 +109,8 @@ app.post(
   }
 );
 
+export const GRAPH_API_VERSION = "v21.0";
+
 export async function sendMessage(recipientId: string, text: string, quickReplies?: QuickReply[]): Promise<void> {
   const messagePayload: Record<string, unknown> = { text };
   if (quickReplies && quickReplies.length > 0) {
@@ -117,7 +119,7 @@ export async function sendMessage(recipientId: string, text: string, quickReplie
 
   try {
     const response = await axios.post(
-      `https://graph.facebook.com/v21.0/me/messages`,
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages`,
       {
         recipient: { id: recipientId },
         message: messagePayload,
@@ -138,7 +140,47 @@ export async function sendMessage(recipientId: string, text: string, quickReplie
   }
 }
 
+export const MAIN_MENU_QUICK_REPLIES: QuickReply[] = [
+  { content_type: "text", title: "Product Help", payload: "MENU_PRODUCT_HELP" },
+  { content_type: "text", title: "Contact Human", payload: "MENU_CONTACT_HUMAN" },
+];
+
+// Greeting + persistent-menu copy are placeholders per D-05 — user may adjust before go-live
+export async function setupMessengerProfile(): Promise<void> {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messenger_profile`,
+      {
+        get_started: { payload: "GET_STARTED" },
+        greeting: [
+          {
+            locale: "default",
+            text: "Hi! I'm the Govi support bot. Ask me about products or talk to a human.",
+          },
+        ],
+        persistent_menu: [
+          {
+            locale: "default",
+            composer_input_disabled: false,
+            call_to_actions: [
+              { type: "postback", title: "Product Help", payload: "MENU_PRODUCT_HELP" },
+              { type: "postback", title: "Contact Human", payload: "MENU_CONTACT_HUMAN" },
+              { type: "postback", title: "Main Menu", payload: "MENU_MAIN" },
+            ],
+          },
+        ],
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+    console.log("Messenger profile configured");
+  } catch (err: unknown) {
+    const axiosErr = err as import("axios").AxiosError;
+    console.error("Messenger profile setup failed:", axiosErr.message, axiosErr.response?.data);
+  }
+}
+
 const port = process.env.PORT ?? 3000;
 app.listen(port, () => {
   console.log(`Messenger bot listening on port ${port}`);
+  setupMessengerProfile();
 });
