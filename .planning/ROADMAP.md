@@ -49,8 +49,8 @@ Plans:
   4. Running `curl -X POST /content/reload` re-reads vault files from disk and reflects edits made since startup — no server restart required
 **Plans:** 2 plans
 Plans:
-- [ ] 02-01-PLAN.md — Wave 0: install python-frontmatter + pytest, add `vault_path` config field, write failing tests for VAULT-01/02/03 + reload endpoint + extended /health
-- [ ] 02-02-PLAN.md — Wave 1 (vault slice): create `app/routers/content.py` with loader + GET /{id} + POST /reload, extend /health with vault_loaded + content_count, wire lifespan in main.py, document VAULT_PATH
+- [x] 02-01-PLAN.md — Wave 0: install python-frontmatter + pytest, add `vault_path` config field, write failing tests for VAULT-01/02/03 + reload endpoint + extended /health
+- [x] 02-02-PLAN.md — Wave 1 (vault slice): create `app/routers/content.py` with loader + GET /{id} + POST /reload, extend /health with vault_loaded + content_count, wire lifespan in main.py, document VAULT_PATH
 
 ### Phase 3: Product Q&A Flow
 **Mode:** mvp
