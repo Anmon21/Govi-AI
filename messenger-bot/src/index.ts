@@ -24,7 +24,14 @@ export function verifySignature(req: Request, res: Response, next: NextFunction)
   const appSecret = process.env.FACEBOOK_APP_SECRET;
   if (!appSecret) {
     console.warn("FACEBOOK_APP_SECRET not set — skipping webhook signature verification");
-    (req as any).parsedBody = JSON.parse((req.body as Buffer).toString("utf8"));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse((req.body as Buffer).toString("utf8"));
+    } catch {
+      res.sendStatus(400);
+      return;
+    }
+    (req as any).parsedBody = parsed;
     next();
     return;
   }
@@ -50,7 +57,14 @@ export function verifySignature(req: Request, res: Response, next: NextFunction)
     return;
   }
 
-  (req as any).parsedBody = JSON.parse(rawBody.toString("utf8"));
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    res.sendStatus(400);
+    return;
+  }
+  (req as any).parsedBody = parsedBody;
   next();
 }
 
