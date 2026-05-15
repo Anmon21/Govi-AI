@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
+status: Awaiting next milestone
 stopped_at: Completed 05-02-PLAN.md (Phase 05 complete)
-last_updated: "2026-05-15T09:33:46.171Z"
-last_activity: 2026-05-15
+last_updated: "2026-05-15T15:32:23.147Z"
+last_activity: 2026-05-15 — Milestone v1.0 completed and archived
 progress:
   total_phases: 5
-  completed_phases: 6
+  completed_phases: 5
   total_plans: 11
   completed_plans: 11
-  percent: 120
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-05-15
-
-Progress: [██████████] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-05-15 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -84,6 +82,18 @@ None yet.
 
 ## Deferred Items
 
+Items acknowledged and deferred at milestone close on 2026-05-15:
+
+| Category | Item | Status |
+|----------|------|--------|
+| uat_gap | Phase 01: 01-HUMAN-UAT.md — 5 pending live Messenger scenarios | partial |
+| uat_gap | Phase 05: 05-HUMAN-UAT.md — 1 pending (typing indicator visible) | partial |
+| verification | Phase 01: 01-VERIFICATION.md — human_needed (live webhook/Messenger tests) | human_needed |
+| verification | Phase 04: 04-VERIFICATION.md — human_needed (live escalation flow test) | human_needed |
+| verification | Phase 05: 05-VERIFICATION.md — human_needed (live typing indicator test) | human_needed |
+
+Known deferred items at close: 6 (see above — all require a deployed Facebook bot)
+
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | v2 | "Was this helpful?" quick reply after answers | Deferred | Init |
@@ -95,3 +105,7 @@ None yet.
 Last session: 2026-05-15T09:33:46.167Z
 Stopped at: Completed 05-02-PLAN.md (Phase 05 complete)
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
