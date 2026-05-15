@@ -19,8 +19,7 @@ Customers can get instant product answers and reach a human through Messenger �
 
 ### Active
 
-- [ ] Human escalation flow — notify admin on Facebook Page inbox
-- [ ] Polish + hardening — typing indicator, deployment verification, final env docs
+- [ ] Live Messenger UAT — typing indicator visual confirmation (human test, pending deploy)
 
 ### Validated
 
@@ -81,4 +80,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-15 after Phase 3 completion (phases 1–4 done; Phase 5 next)*
+*Last updated: 2026-05-15 after Phase 5 completion — all 5 phases done, milestone v1.0 ready*
