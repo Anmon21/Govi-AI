@@ -106,6 +106,8 @@ app.post(
 );
 
 export const GRAPH_API_VERSION = "v21.0";
+export const PAGE_INBOX_APP_ID = "263902037430900";
+export const lastMessageCache = new Map<string, string>();
 
 export async function sendMessage(recipientId: string, text: string, quickReplies?: QuickReply[]): Promise<void> {
   const messagePayload: Record<string, unknown> = { text };
@@ -137,6 +139,46 @@ export async function sendMessage(recipientId: string, text: string, quickReplie
       console.error("sendMessage failed (unexpected error):", err);
     }
   }
+}
+
+export async function passThreadControl(recipientId: string): Promise<void> {
+  try {
+    const response = await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/pass_thread_control`,
+      {
+        recipient: { id: recipientId },
+        target_app_id: PAGE_INBOX_APP_ID,
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+    if (response.data?.error) {
+      console.error("pass_thread_control Graph API error:", response.data.error.message, response.data.error);
+    }
+  } catch (err: unknown) {
+    // SEC-03: never log the full axios error (config.url contains PAGE_ACCESS_TOKEN)
+    if (axios.isAxiosError(err)) {
+      console.error("passThreadControl failed:", err.message, err.response?.data);
+    } else {
+      console.error("passThreadControl failed (unexpected):", err);
+    }
+  }
+}
+
+export async function handleEscalation(senderId: string): Promise<void> {
+  const lastMessage = lastMessageCache.get(senderId);
+  const adminPsid = process.env.ADMIN_PSID;
+
+  if (!adminPsid) {
+    console.warn("ADMIN_PSID not configured — escalation degraded");
+    await sendMessage(senderId, "Thanks for reaching out! We'll be in touch as soon as possible.", MAIN_MENU_QUICK_REPLIES);
+    return;
+  }
+
+  const contextLine = lastMessage ? `\nLast message: "${lastMessage}"` : "";
+  await sendMessage(adminPsid, `A customer (${senderId}) requested human support.${contextLine}\nPlease reply from the Page Inbox.`);
+  // Send customer confirmation BEFORE passThreadControl — bot must own the thread at send time (Pitfall 1)
+  await sendMessage(senderId, "Connecting you with a human — we'll be with you shortly!");
+  await passThreadControl(senderId);
 }
 
 export const MAIN_MENU_QUICK_REPLIES: QuickReply[] = [
@@ -261,6 +303,11 @@ export async function handleWebhookEvent(event: any): Promise<void> {
     return;
   }
 
+  if (event.postback?.payload === "MENU_CONTACT_HUMAN") {
+    await handleEscalation(senderId);
+    return;
+  }
+
   if (event.postback) {
     // Additional postback payloads handled in Phase 2+
     console.log("Postback received:", event.postback.payload);
@@ -280,7 +327,7 @@ export async function handleWebhookEvent(event: any): Promise<void> {
       return;
     }
     if (payload === "MENU_CONTACT_HUMAN") {
-      // Phase 4 owns the escalation flow — log only for now
+      await handleEscalation(senderId);
       return;
     }
     if (payload.startsWith(PAYLOAD_PREFIX_CATEGORY)) {
@@ -304,6 +351,7 @@ export async function handleWebhookEvent(event: any): Promise<void> {
 
   if (event.message?.text) {
     console.log(`[${senderId}] ${event.message.text}`);
+    lastMessageCache.set(senderId, event.message.text);
     // CORE-04: Free text fallback — never a silent dead end
     await sendFallbackMessage(senderId);
     return;
