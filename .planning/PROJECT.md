@@ -10,10 +10,24 @@ A rule-based Facebook Messenger chatbot for Govi (e-commerce/retail) that guides
 
 Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates.
 
+## Current Milestone: v1.1 UX Polish & Hardening
+
+**Goal:** Fix four v1.0 tech debt bugs and add three UX improvements for a polished, production-ready bot.
+
+**Target features:**
+- Fix CR-01: Postback handler dispatches persistent menu taps (MENU_PRODUCT_HELP / MENU_MAIN)
+- Fix CR-02: Webhook async loop wrapped in try/catch to prevent unhandled rejections
+- Fix WR-01: VERIFY_TOKEN validated at startup (fail-fast if missing)
+- Fix WR-05: Non-Axios error branches sanitize logs to prevent token leak
+- "Was this helpful?" quick reply after every answer; No → escalation flow
+- Answer truncation at ~200 chars + "Read more" quick reply sends full answer as follow-up
+- In-memory returning user memory — greet by name on repeat visits (per PSID Map, resets on restart)
+
 ## Current State
 
-**Version:** v1.0 (shipped 2026-05-15)
-**Status:** All 5 phases complete. Awaiting production deployment and live Messenger UAT.
+**Version:** v1.1 (in progress)
+**Previous:** v1.0 shipped 2026-05-15 — feature-complete, awaiting production deployment
+**Status:** Defining requirements for v1.1 UX Polish & Hardening.
 
 **Codebase:**
 - `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~350 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator
@@ -38,20 +52,25 @@ Customers can get instant product answers and reach a human through Messenger �
 - ✓ Human escalation — Handover Protocol + admin Messenger notify + graceful fallback (ESC-01–04) — v1.0, Phase 4
 - ✓ Typing indicator before answers + full .env.example documentation (POLISH-01) — v1.0, Phase 5
 
-### Active
+### Active (v1.1)
 
+- [ ] Fix CR-01: Postback handler dispatches MENU_PRODUCT_HELP/MENU_MAIN from persistent menu
+- [ ] Fix CR-02: Webhook async loop wrapped in try/catch
+- [ ] Fix WR-01: VERIFY_TOKEN fail-fast validation at startup
+- [ ] Fix WR-05: Sanitize non-Axios error logs to prevent token leak
+- [ ] "Was this helpful?" quick reply after answers — No → escalation
+- [ ] Answer truncation (~200 chars) + "Read more" quick reply → full answer as follow-up
+- [ ] In-memory returning user memory — greet by name (per PSID Map)
 - [ ] Live Messenger UAT — 7 human-only scenarios pending production deployment
 
-### Out of Scope (v1)
+### Out of Scope (v1.x)
 
 - Order tracking / order status — no store backend connected
 - AI-powered free-text responses — using rule-based menus only
 - Shopify / WooCommerce integration — standalone system
 - Custom admin web UI — Obsidian vault is the content management interface
-- Multi-language support — English only for v1
-- Answer length truncation + "Read more" link — deferred to v2
-- "Was this helpful?" quick reply — deferred to v2
-- Returning user memory / greet by name — deferred to v2
+- Multi-language support — English only
+- Persistent user memory (SQLite/DB) — in-memory is sufficient for v1.1
 
 ## Context
 
@@ -85,5 +104,22 @@ From code review findings (see phase REVIEW.md files):
 - **WR-01** (Phase 3): VERIFY_TOKEN uses `!` assertion — undefined === undefined bypass if env var missing at startup
 - **WR-05** (Phase 5): Non-Axios else branches log raw `err` — potential token leak for unexpected error types
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-05-15 after v1.0 milestone completion*
+*Last updated: 2026-05-15 — v1.1 milestone started*

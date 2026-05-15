@@ -1,111 +1,84 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: Completed 05-02-PLAN.md (Phase 05 complete)
-last_updated: "2026-05-15T15:32:23.147Z"
-last_activity: 2026-05-15 — Milestone v1.0 completed and archived
+milestone: v1.1
+milestone_name: UX Polish & Hardening
+status: planning
+stopped_at: Milestone v1.1 started — defining requirements
+last_updated: "2026-05-15T00:00:00.000Z"
+last_activity: 2026-05-15 — Milestone v1.1 started
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-14)
+See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates
-**Current focus:** Phase 05 — polish-hardening
+**Current focus:** v1.1 — UX Polish & Hardening
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-15 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-15 — Milestone v1.1 started
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 0
 - Average duration: —
 - Total execution time: —
 
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01 | 3 | - | - |
-| 02 | 2 | - | - |
-| 03 | 2 | - | - |
-| 04 | 2 | - | - |
-| 05 | 2 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: —
-- Trend: —
+**By Phase:** (populated after roadmap is created)
 
 *Updated after each plan completion*
-| Phase 05 P01 | 5 | 2 tasks | 1 files |
-| Phase 05 P02 | 10min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Carried forward from v1.0:
 
 - [Init]: Rule-based menus over AI — deterministic, easier to manage
 - [Init]: Obsidian vault as content store — no custom admin UI needed
 - [Init]: Keep existing Node.js + FastAPI two-service split unchanged
-- [Phase ?]: assert.ok(expr === value) form for typing-indicator assertions to satisfy plan acceptance criteria grep patterns
-- [Phase ?]: 05-02: sendTypingIndicator placed after passThreadControl; finally block guarantees typing_off on success and error paths
+- [v1.1]: In-memory user memory (Map per PSID) — SQLite deferred; resets on restart is acceptable for v1.1
+- [v1.1]: "Was this helpful?" No → escalation (not re-show options)
+- [v1.1]: "Read more" sends full answer as follow-up message (not external URL)
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
 - [Phase 1]: Webhook signature fix requires `express.raw()` before `express.json()` — middleware order matters
-- [Phase 4]: Admin PSID requires admin to have messaged the Page at least once from their personal account — document as required setup step
-- [Phase 2]: Verify `python-frontmatter` current version on PyPI before pinning (training knowledge may be stale)
+- [Phase 4]: Admin PSID requires admin to have messaged the Page at least once — document as required setup step
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone close on 2026-05-15:
+Carried forward from v1.0 (all require deployed Facebook bot):
 
 | Category | Item | Status |
 |----------|------|--------|
 | uat_gap | Phase 01: 01-HUMAN-UAT.md — 5 pending live Messenger scenarios | partial |
 | uat_gap | Phase 05: 05-HUMAN-UAT.md — 1 pending (typing indicator visible) | partial |
-| verification | Phase 01: 01-VERIFICATION.md — human_needed (live webhook/Messenger tests) | human_needed |
-| verification | Phase 04: 04-VERIFICATION.md — human_needed (live escalation flow test) | human_needed |
-| verification | Phase 05: 05-VERIFICATION.md — human_needed (live typing indicator test) | human_needed |
-
-Known deferred items at close: 6 (see above — all require a deployed Facebook bot)
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| v2 | "Was this helpful?" quick reply after answers | Deferred | Init |
-| v2 | Answer length truncation + "Read more" link | Deferred | Init |
-| v2 | Returning user memory / greet by name | Deferred | Init |
+| verification | Phase 01: 01-VERIFICATION.md — human_needed | human_needed |
+| verification | Phase 04: 04-VERIFICATION.md — human_needed | human_needed |
+| verification | Phase 05: 05-VERIFICATION.md — human_needed | human_needed |
 
 ## Session Continuity
 
-Last session: 2026-05-15T09:33:46.167Z
-Stopped at: Completed 05-02-PLAN.md (Phase 05 complete)
+Last session: 2026-05-15
+Stopped at: Milestone v1.1 started — proceeding to define requirements
 Resume file: None
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
