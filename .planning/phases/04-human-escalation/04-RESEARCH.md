@@ -190,16 +190,15 @@ export async function handleEscalation(senderId: string): Promise<void> {
     `A customer has requested human support.${contextLine}\nPlease reply in the Page Inbox.`
   );
 
-  // Transfer thread — bot sends confirmation before or immediately after
-  // Pass first, then confirm, so the confirmation is the bot's last action
-  await passThreadControl(senderId);
-
-  // Customer confirmation — bot must send this before losing thread control
-  // Note: send BEFORE pass_thread_control in production to guarantee delivery
+  // (1) Send customer confirmation BEFORE passThreadControl — bot must own
+  //     the thread at send time or Facebook returns error 551 (Pitfall 1)
   await sendMessage(
     senderId,
     "Connecting you with a human — we'll be with you shortly!"
   );
+
+  // (2) Transfer thread — bot is done sending after this call
+  await passThreadControl(senderId);
 }
 ```
 
@@ -368,22 +367,18 @@ for (const entry of body.entry ?? []) {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `pass_thread_control` fail if the app is NOT configured as Primary Receiver?**
    - What we know: The API requires Primary Receiver status. The error code would be 100 (invalid parameter) or an authorization error.
-   - What's unclear: Whether Facebook returns a clear error or silently ignores the call.
-   - Recommendation: Log `response.data` on all `passThreadControl` calls (already done in the error handler); add a startup warning if `ADMIN_PSID` is set but the Handover Protocol setup cannot be verified programmatically.
+   - RESOLVED: Accept risk and proceed. The `passThreadControl` catch block logs `response.data` on all error responses (already specified in Plan 04-02 Task 1). The live Messenger checkpoint (Task 2) is the safety net — if Primary Receiver is not configured, the manual test will reveal it immediately. A startup warning is added if `ADMIN_PSID` is set.
 
 2. **Does the bot need to subscribe to `messaging_handovers` webhook event for ESC-03 to work?**
-   - What we know: `messaging_handovers` is needed to receive notification when control is *returned* to the bot. It is NOT required to *call* pass_thread_control.
-   - What's unclear: Whether the App Dashboard webhook subscription must include `messaging_handovers` for the call to succeed.
-   - Recommendation: Document as an optional setup step. Phase 4 does not need to handle the return event for v1.
+   - What we know: `messaging_handovers` is needed to receive notification when control is *returned* to the bot. It is NOT required to *call* `pass_thread_control`.
+   - RESOLVED: No webhook subscription change is needed for Phase 4. `pass_thread_control` succeeds based on App Dashboard Primary Receiver configuration, not webhook subscriptions. The live Messenger checkpoint (Task 2) verifies actual thread transfer. Document `messaging_handovers` subscription as an optional v2 setup step (for bot reactivation after human handoff).
 
 3. **Can the admin notification include a deep link to the Page Inbox conversation?**
-   - What we know: Facebook Messenger does not support clickable deep links into specific conversations in standard text messages.
-   - What's unclear: Whether template messages or structured messages could link to the conversation.
-   - Recommendation: Out of scope for v1. Plain text notification is sufficient.
+   - RESOLVED: Out of scope for v1. Facebook Messenger does not support deep links to specific conversations in plain text messages. Plain-text notification with last-message context is sufficient for ESC-04.
 
 ---
 
