@@ -45,27 +45,25 @@
 
 ## Traceability
 
-Updated by roadmapper after roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEBT-01 | — | Pending |
-| DEBT-02 | — | Pending |
-| DEBT-03 | — | Pending |
-| DEBT-04 | — | Pending |
-| UX-01 | — | Pending |
-| UX-02 | — | Pending |
-| UX-03 | — | Pending |
-| UX-04 | — | Pending |
-| UX-05 | — | Pending |
-| UX-06 | — | Pending |
-| UX-07 | — | Pending |
+| DEBT-01 | Phase 6 | Pending |
+| DEBT-02 | Phase 6 | Pending |
+| DEBT-03 | Phase 6 | Pending |
+| DEBT-04 | Phase 6 | Pending |
+| UX-01 | Phase 7 | Pending |
+| UX-02 | Phase 7 | Pending |
+| UX-03 | Phase 7 | Pending |
+| UX-04 | Phase 8 | Pending |
+| UX-05 | Phase 8 | Pending |
+| UX-06 | Phase 9 | Pending |
+| UX-07 | Phase 9 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 11 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 11 ⚠️
+- Mapped to phases: 11 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-05-15*
-*Last updated: 2026-05-15 after initial v1.1 definition*
+*Last updated: 2026-05-15 — traceability table populated after roadmap creation*
