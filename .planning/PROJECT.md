@@ -19,11 +19,16 @@ Customers can get instant product answers and reach a human through Messenger �
 
 ### Active
 
-- [ ] Rule-based menu system in the Messenger bot (replace current AI-passthrough)
-- [ ] Product Q&A flow — customers can ask product questions via menus
 - [ ] Human escalation flow — notify admin on Facebook Page inbox
-- [ ] Obsidian vault integration — FastAPI backend reads Q&A content from Obsidian markdown files at a configured local vault path
-- [ ] Q&A content format — structured markdown files in Obsidian vault define questions, answers, and menu flows
+- [ ] Polish + hardening — typing indicator, deployment verification, final env docs
+
+### Validated
+
+- ✓ Rule-based menu system in the Messenger bot — Validated in Phase 1: Security + Bot Foundation
+- ✓ Obsidian vault integration — FastAPI reads Q&A content from vault — Validated in Phase 2: Vault Service
+- ✓ Q&A content format — structured markdown files with frontmatter IDs — Validated in Phase 2: Vault Service
+- ✓ Product Q&A flow — category → question → answer via quick replies — Validated in Phase 3: Product Q&A Flow
+- ✓ Human escalation wiring — MENU_CONTACT_HUMAN + passThreadControl + admin notify — Validated in Phase 4: Human Escalation
 
 ### Out of Scope
 
@@ -76,4 +81,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-14 after initialization*
+*Last updated: 2026-05-15 after Phase 3 completion (phases 1–4 done; Phase 5 next)*
