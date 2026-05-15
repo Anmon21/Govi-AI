@@ -144,6 +144,98 @@ export const MAIN_MENU_QUICK_REPLIES: QuickReply[] = [
   { content_type: "text", title: "Contact Human", payload: "MENU_CONTACT_HUMAN" },
 ];
 
+export const PAYLOAD_PREFIX_CATEGORY = "CATEGORY:";
+export const PAYLOAD_PREFIX_QUESTION = "QUESTION:";
+
+async function sendApologyWithMenu(recipientId: string): Promise<void> {
+  await sendMessage(
+    recipientId,
+    "Something went wrong fetching that — back to the main menu:",
+    MAIN_MENU_QUICK_REPLIES
+  );
+}
+
+export async function sendCategoryMenu(recipientId: string): Promise<void> {
+  try {
+    const response = await axios.get(`${GOVI_AI_URL}/content?type=category`);
+    const items: Array<{ id: string; title: string }> = response.data?.items ?? [];
+    if (items.length === 0) {
+      await sendMessage(
+        recipientId,
+        "No product topics available yet — back to the main menu:",
+        MAIN_MENU_QUICK_REPLIES
+      );
+      return;
+    }
+    const quickReplies: QuickReply[] = items.slice(0, 13).map((item) => ({
+      content_type: "text",
+      title: item.title,
+      payload: `${PAYLOAD_PREFIX_CATEGORY}${item.id}`,
+    }));
+    await sendMessage(recipientId, "Pick a topic:", quickReplies);
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      console.error("sendCategoryMenu failed:", err.message, err.response?.data);
+    } else {
+      console.error("sendCategoryMenu failed (unexpected error):", err);
+    }
+    await sendApologyWithMenu(recipientId);
+  }
+}
+
+export async function sendQuestionMenu(recipientId: string, categoryId: string): Promise<void> {
+  try {
+    const url = `${GOVI_AI_URL}/content?type=question&category=${encodeURIComponent(categoryId)}`;
+    const response = await axios.get(url);
+    const items: Array<{ id: string; title: string }> = response.data?.items ?? [];
+    if (items.length === 0) {
+      await sendMessage(
+        recipientId,
+        "No questions in that topic yet — back to the main menu:",
+        MAIN_MENU_QUICK_REPLIES
+      );
+      return;
+    }
+    const truncated = items.slice(0, 12);
+    const quickReplies: QuickReply[] = truncated.map((item) => ({
+      content_type: "text",
+      title: item.title,
+      payload: `${PAYLOAD_PREFIX_QUESTION}${item.id}`,
+    }));
+    // If we truncated, give the user an escape hatch
+    if (items.length > 12) {
+      quickReplies.push({ content_type: "text", title: "Main menu", payload: "MENU_MAIN" });
+    }
+    await sendMessage(recipientId, "Pick a question:", quickReplies);
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      console.error("sendQuestionMenu failed:", err.message, err.response?.data);
+    } else {
+      console.error("sendQuestionMenu failed (unexpected error):", err);
+    }
+    await sendApologyWithMenu(recipientId);
+  }
+}
+
+export async function sendAnswer(recipientId: string, questionId: string): Promise<void> {
+  try {
+    const response = await axios.get(`${GOVI_AI_URL}/content/${encodeURIComponent(questionId)}`);
+    const body: string | undefined = response.data?.body;
+    if (typeof body !== "string" || body.length === 0) {
+      await sendApologyWithMenu(recipientId);
+      return;
+    }
+    await sendMessage(recipientId, body, MAIN_MENU_QUICK_REPLIES);
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      console.error("sendAnswer failed:", err.message, err.response?.data);
+    } else {
+      console.error("sendAnswer failed (unexpected error):", err);
+    }
+    await sendApologyWithMenu(recipientId);
+  }
+}
+
 export async function sendWelcomeMessage(recipientId: string): Promise<void> {
   await sendMessage(
     recipientId,
@@ -177,7 +269,36 @@ export async function handleWebhookEvent(event: any): Promise<void> {
 
   if (event.message?.quick_reply) {
     // Quick reply tap — PITFALL 6: must check before message.text (quick_reply also sets text)
-    console.log("Quick reply received:", event.message.quick_reply.payload);
+    const payload: string = event.message.quick_reply.payload ?? "";
+    console.log("Quick reply received:", payload);
+    if (payload === "MENU_PRODUCT_HELP") {
+      await sendCategoryMenu(senderId);
+      return;
+    }
+    if (payload === "MENU_MAIN") {
+      await sendWelcomeMessage(senderId);
+      return;
+    }
+    if (payload === "MENU_CONTACT_HUMAN") {
+      // Phase 4 owns the escalation flow — log only for now
+      return;
+    }
+    if (payload.startsWith(PAYLOAD_PREFIX_CATEGORY)) {
+      const categoryId = payload.slice(PAYLOAD_PREFIX_CATEGORY.length);
+      if (categoryId) {
+        await sendQuestionMenu(senderId, categoryId);
+        return;
+      }
+    }
+    if (payload.startsWith(PAYLOAD_PREFIX_QUESTION)) {
+      const questionId = payload.slice(PAYLOAD_PREFIX_QUESTION.length);
+      if (questionId) {
+        await sendAnswer(senderId, questionId);
+        return;
+      }
+    }
+    // Unknown / malformed payload — re-anchor instead of going silent
+    await sendFallbackMessage(senderId);
     return;
   }
 

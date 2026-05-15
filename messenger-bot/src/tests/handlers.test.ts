@@ -123,9 +123,14 @@ test("handleWebhookEvent: quick_reply tap does NOT trigger fallback", async (t) 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const axios = require("axios");
   const originalPost = axios.post;
-  const calls: any[] = [];
+  const originalGet = axios.get;
+  const postCalls: any[] = [];
+  // Stub axios.get so sendCategoryMenu succeeds without a real HTTP call (Phase 3)
+  axios.get = async (_url: string) => ({ data: { items: [
+    { id: "cat-products", type: "category", title: "Products" },
+  ]}});
   axios.post = async (_url: string, body: any) => {
-    calls.push(body);
+    postCalls.push(body);
     return { data: {} };
   };
 
@@ -134,11 +139,15 @@ test("handleWebhookEvent: quick_reply tap does NOT trigger fallback", async (t) 
       message: { quick_reply: { payload: "MENU_PRODUCT_HELP" }, text: "Product Help" },
       sender: { id: "USR_1" },
     });
-    // sendFallbackMessage must NOT be called; quick_reply taps go to a separate handler
-    // A quick_reply tap should result in 0 axios.post calls (Phase 2+ handles navigation)
-    assert.strictEqual(calls.length, 0,
-      "Quick reply tap should NOT trigger sendFallbackMessage (no fallback calls expected)");
+    // sendFallbackMessage must NOT be called; MENU_PRODUCT_HELP routes to sendCategoryMenu
+    // Phase 3: one sendMessage (category menu) is expected — but fallback text must NOT appear
+    const fallbackCalls = postCalls.filter(
+      (b) => b?.message?.text?.includes("I work best with the buttons below")
+    );
+    assert.strictEqual(fallbackCalls.length, 0,
+      "Quick reply tap should NOT trigger sendFallbackMessage");
   } finally {
     axios.post = originalPost;
+    axios.get = originalGet;
   }
 });
