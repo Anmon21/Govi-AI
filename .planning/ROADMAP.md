@@ -74,7 +74,10 @@ Plans:
   2. After a customer requests escalation, the admin receives a Messenger message that includes the customer's last message as context
   3. After escalation, the customer's thread appears in the Page inbox and accepts replies from the admin (Handover Protocol transferred thread control)
   4. If ADMIN_PSID is not configured, escalation fails gracefully — a console log is emitted and the bot sends the customer a "we'll be in touch" message rather than crashing
-**Plans:** TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 04-01-PLAN.md — Wave 0: failing/skipping test stubs in escalation.test.ts for ESC-01/02/03/04 + ADMIN_PSID soft-fail; ADMIN_PSID added to .env.example
+- [ ] 04-02-PLAN.md — Wave 1 (escalation slice): PAGE_INBOX_APP_ID + lastMessageCache + passThreadControl + handleEscalation; wire MENU_CONTACT_HUMAN in both quick_reply and postback dispatchers; live Messenger verification checkpoint
 
 ### Phase 5: Polish + Hardening
 **Mode:** mvp
@@ -97,5 +100,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Security + Bot Foundation | 0/3 | Not started | - |
 | 2. Vault Service | 0/2 | Not started | - |
 | 3. Product Q&A Flow | 0/TBD | Not started | - |
-| 4. Human Escalation | 0/TBD | Not started | - |
+| 4. Human Escalation | 0/2 | Not started | - |
 | 5. Polish + Hardening | 0/TBD | Not started | - |
