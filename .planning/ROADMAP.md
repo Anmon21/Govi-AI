@@ -87,7 +87,10 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. When a customer selects a question, a typing indicator appears in the Messenger thread before the answer arrives — the bot does not appear frozen during the API fetch
   2. All environment variables are documented with example values and the bot starts cleanly from a fresh clone with only .env configuration
-**Plans:** TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — Wave 0: update qa-flow.test.ts QUESTION assertion (postCalls.length 1→3, body lookup index 0→1, typing_on/off ordering); add new test for typing_off-on-fetch-failure (POLISH-01 RED state)
+- [ ] 05-02-PLAN.md — Wave 1 (polish slice): add exported sendTypingIndicator helper, wrap sendAnswer with typing_on / try / finally typing_off (SEC-03 preserved), expand messenger-bot/.env.example comments to UI-SPEC Developer Experience Contract
 **UI hint**: yes
 
 ## Progress
@@ -101,4 +104,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Vault Service | 0/2 | Not started | - |
 | 3. Product Q&A Flow | 0/TBD | Not started | - |
 | 4. Human Escalation | 0/2 | Not started | - |
-| 5. Polish + Hardening | 0/TBD | Not started | - |
+| 5. Polish + Hardening | 0/2 | Not started | - |
