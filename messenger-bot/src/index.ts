@@ -164,6 +164,29 @@ export async function passThreadControl(recipientId: string): Promise<void> {
   }
 }
 
+export async function sendTypingIndicator(
+  recipientId: string,
+  action: "typing_on" | "typing_off"
+): Promise<void> {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/me/messages`,
+      {
+        recipient: { id: recipientId },
+        sender_action: action,
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+  } catch (err: unknown) {
+    // SEC-03: Never log the full axios error (config.url contains PAGE_ACCESS_TOKEN)
+    if (axios.isAxiosError(err)) {
+      console.error("sendTypingIndicator failed:", err.message, err.response?.data);
+    } else {
+      console.error("sendTypingIndicator failed (unexpected error):", err);
+    }
+  }
+}
+
 export async function handleEscalation(senderId: string): Promise<void> {
   const lastMessage = lastMessageCache.get(senderId);
   const adminPsid = process.env.ADMIN_PSID;
@@ -260,6 +283,7 @@ export async function sendQuestionMenu(recipientId: string, categoryId: string):
 }
 
 export async function sendAnswer(recipientId: string, questionId: string): Promise<void> {
+  await sendTypingIndicator(recipientId, "typing_on");
   try {
     const response = await axios.get(`${GOVI_AI_URL}/content/${encodeURIComponent(questionId)}`);
     const body: string | undefined = response.data?.body;
@@ -275,6 +299,8 @@ export async function sendAnswer(recipientId: string, questionId: string): Promi
       console.error("sendAnswer failed (unexpected error):", err);
     }
     await sendApologyWithMenu(recipientId);
+  } finally {
+    await sendTypingIndicator(recipientId, "typing_off");
   }
 }
 
