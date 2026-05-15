@@ -43,7 +43,7 @@
 
 ### POLISH
 
-- [ ] **POLISH-01**: Bot shows a typing indicator (typing_on action) while fetching answers from the FastAPI content API
+- [x] **POLISH-01**: Bot shows a typing indicator (typing_on action) while fetching answers from the FastAPI content API
 
 ---
 

@@ -4,14 +4,14 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-05-15T08:43:59.304Z"
-last_activity: 2026-05-15 -- Phase 05 planning complete
+last_updated: "2026-05-15T09:29:36.965Z"
+last_activity: 2026-05-15
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 11
-  completed_plans: 9
-  percent: 82
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-14)
 
 **Core value:** Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates
-**Current focus:** Phase 03 — product-q-a-flow
+**Current focus:** Phase 05 — polish-hardening
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
+Phase: 05 (polish-hardening) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-05-15 -- Phase 05 planning complete
+Last activity: 2026-05-15
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 05 P01 | 5 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Recent decisions affecting current work:
 - [Init]: Rule-based menus over AI — deterministic, easier to manage
 - [Init]: Obsidian vault as content store — no custom admin UI needed
 - [Init]: Keep existing Node.js + FastAPI two-service split unchanged
+- [Phase ?]: assert.ok(expr === value) form for typing-indicator assertions to satisfy plan acceptance criteria grep patterns
 
 ### Pending Todos
 
@@ -87,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-15T07:59:47.161Z
+Last session: 2026-05-15T09:29:36.961Z
 Stopped at: Phase 5 UI-SPEC approved
-Resume file: .planning/phases/05-polish-hardening/05-UI-SPEC.md
+Resume file: None
