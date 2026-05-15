@@ -76,8 +76,8 @@ Plans:
   4. If ADMIN_PSID is not configured, escalation fails gracefully — a console log is emitted and the bot sends the customer a "we'll be in touch" message rather than crashing
 **Plans:** 2 plans
 Plans:
-- [ ] 04-01-PLAN.md — Wave 0: failing/skipping test stubs in escalation.test.ts for ESC-01/02/03/04 + ADMIN_PSID soft-fail; ADMIN_PSID added to .env.example
-- [ ] 04-02-PLAN.md — Wave 1 (escalation slice): PAGE_INBOX_APP_ID + lastMessageCache + passThreadControl + handleEscalation; wire MENU_CONTACT_HUMAN in both quick_reply and postback dispatchers; live Messenger verification checkpoint
+- [x] 04-01-PLAN.md — Wave 0: failing/skipping test stubs in escalation.test.ts for ESC-01/02/03/04 + ADMIN_PSID soft-fail; ADMIN_PSID added to .env.example
+- [x] 04-02-PLAN.md — Wave 1 (escalation slice): PAGE_INBOX_APP_ID + lastMessageCache + passThreadControl + handleEscalation; wire MENU_CONTACT_HUMAN in both quick_reply and postback dispatchers; live Messenger verification checkpoint
 
 ### Phase 5: Polish + Hardening
 **Mode:** mvp
