@@ -132,8 +132,10 @@ test("qa-flow: QUESTION:<id> triggers sendAnswer with body text and main menu re
     });
     assert.ok(stubs.getCalls.some((c) => c.url.includes("/content/q-shipping-01")),
       "should GET /content/q-shipping-01");
-    assert.strictEqual(stubs.postCalls.length, 1, "single sendMessage delivers answer + re-anchor");
-    const msg = stubs.postCalls[0].body?.message;
+    assert.strictEqual(stubs.postCalls.length, 3, "typing_on + sendMessage + typing_off for answer delivery");
+    assert.ok(stubs.postCalls[0].body?.sender_action === "typing_on", "typing_on must be the first POST");
+    assert.ok(stubs.postCalls[2].body?.sender_action === "typing_off", "typing_off must be the third POST (after sendMessage resolves)");
+    const msg = stubs.postCalls[1].body?.message;
     assert.strictEqual(msg?.text, ANSWER_BODY, "message text must equal the answer body");
     assert.deepStrictEqual(msg?.quick_replies, MAIN_MENU_QUICK_REPLIES,
       "main menu quick replies must be re-attached after every answer");
@@ -158,6 +160,33 @@ test("qa-flow: API error sends apology + MAIN_MENU_QUICK_REPLIES (no crash)", as
     assert.ok(typeof msg?.text === "string" && msg.text.length > 0, "apology text must be non-empty");
     assert.deepStrictEqual(msg?.quick_replies, MAIN_MENU_QUICK_REPLIES,
       "main menu quick replies must be re-attached on error");
+  } finally {
+    stubs.restore();
+    console.error = originalError;
+  }
+});
+
+test("qa-flow: sendAnswer typing_off fires even when API fetch fails", async (t) => {
+  if (!handleWebhookEvent || !MAIN_MENU_QUICK_REPLIES || !_sendCategoryMenuExported) { t.skip("pending Plan 03-02 implementation"); return; }
+  const stubs = withAxiosStubs({
+    onGet: async () => { throw new Error("ECONNREFUSED"); },
+  });
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await handleWebhookEvent!({
+      message: { quick_reply: { payload: "QUESTION:q-shipping-01" }, text: "Shipping time?" },
+      sender: { id: "USR_1" },
+    });
+    assert.strictEqual(stubs.postCalls.length, 3, "typing_on + apology + typing_off when fetch fails");
+    assert.strictEqual(stubs.postCalls[0].body?.sender_action, "typing_on", "first POST must be typing_on");
+    assert.ok(
+      typeof stubs.postCalls[1].body?.message?.text === "string" && stubs.postCalls[1].body.message.text.length > 0,
+      "apology text must be non-empty"
+    );
+    assert.deepStrictEqual(stubs.postCalls[1].body?.message?.quick_replies, MAIN_MENU_QUICK_REPLIES,
+      "apology must re-attach main menu quick replies");
+    assert.strictEqual(stubs.postCalls[2].body?.sender_action, "typing_off", "typing_off must fire even when fetch threw (finally block)");
   } finally {
     stubs.restore();
     console.error = originalError;
