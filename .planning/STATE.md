@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-05-15T09:29:36.965Z"
+status: verifying
+stopped_at: Completed 05-02-PLAN.md (Phase 05 complete)
+last_updated: "2026-05-15T09:33:46.171Z"
 last_activity: 2026-05-15
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 Phase: 05 (polish-hardening) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-15
 
-Progress: [█████████░] 91%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 91%
 
 *Updated after each plan completion*
 | Phase 05 P01 | 5 | 2 tasks | 1 files |
+| Phase 05 P02 | 10min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Recent decisions affecting current work:
 - [Init]: Obsidian vault as content store — no custom admin UI needed
 - [Init]: Keep existing Node.js + FastAPI two-service split unchanged
 - [Phase ?]: assert.ok(expr === value) form for typing-indicator assertions to satisfy plan acceptance criteria grep patterns
+- [Phase ?]: 05-02: sendTypingIndicator placed after passThreadControl; finally block guarantees typing_off on success and error paths
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-05-15T09:29:36.961Z
-Stopped at: Phase 5 UI-SPEC approved
+Last session: 2026-05-15T09:33:46.167Z
+Stopped at: Completed 05-02-PLAN.md (Phase 05 complete)
 Resume file: None
