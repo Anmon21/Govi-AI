@@ -101,3 +101,79 @@ def test_reload_endpoint(tmp_path, monkeypatch):
         assert resp.json()["reloaded"] is True
         assert resp.json()["content_count"] == 1
         assert client.get("/content/n1").status_code == 200
+
+
+def test_list_categories_only(tmp_path, monkeypatch):
+    """QA-01: GET /content?type=category lists only category-type items, sorted by id."""
+    write_md(tmp_path / "cat-shipping.md",
+             "id: cat-shipping\ntype: category\ntitle: Shipping\nenabled: true")
+    write_md(tmp_path / "cat-products.md",
+             "id: cat-products\ntype: category\ntitle: Products\nenabled: true")
+    write_md(tmp_path / "q-1.md",
+             "id: q-1\ntype: question\ntitle: Q1\ncategory: cat-shipping\nenabled: true",
+             "Answer A")
+    monkeypatch.setattr(config_module.settings, "vault_path", str(tmp_path))
+    content_module._vault.clear()
+    content_module._vault.update(content_module.load_vault())
+    with TestClient(app) as client:
+        resp = client.get("/content?type=category")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        ids = [item["id"] for item in data["items"]]
+        assert ids == ["cat-products", "cat-shipping"]  # sorted ascending
+        assert all(item["type"] == "category" for item in data["items"])
+        assert all(set(item.keys()) == {"id", "type", "title"} for item in data["items"])
+
+
+def test_list_questions_filtered_by_category(tmp_path, monkeypatch):
+    """QA-02: GET /content?type=question&category=X returns only questions tagged with that category."""
+    write_md(tmp_path / "cat-shipping.md",
+             "id: cat-shipping\ntype: category\ntitle: Shipping\nenabled: true")
+    write_md(tmp_path / "cat-products.md",
+             "id: cat-products\ntype: category\ntitle: Products\nenabled: true")
+    write_md(tmp_path / "q-ship-1.md",
+             "id: q-ship-1\ntype: question\ntitle: Q ship 1\ncategory: cat-shipping\nenabled: true",
+             "ship answer 1")
+    write_md(tmp_path / "q-ship-2.md",
+             "id: q-ship-2\ntype: question\ntitle: Q ship 2\ncategory: cat-shipping\nenabled: true",
+             "ship answer 2")
+    write_md(tmp_path / "q-prod-1.md",
+             "id: q-prod-1\ntype: question\ntitle: Q prod 1\ncategory: cat-products\nenabled: true",
+             "prod answer 1")
+    monkeypatch.setattr(config_module.settings, "vault_path", str(tmp_path))
+    content_module._vault.clear()
+    content_module._vault.update(content_module.load_vault())
+    with TestClient(app) as client:
+        resp = client.get("/content?type=question&category=cat-shipping")
+        assert resp.status_code == 200
+        ids = sorted(item["id"] for item in resp.json()["items"])
+        assert ids == ["q-ship-1", "q-ship-2"]
+
+
+def test_list_unknown_category_returns_empty(tmp_path, monkeypatch):
+    """QA-02: Unknown category -> 200 with empty items, not 404."""
+    write_md(tmp_path / "cat-shipping.md",
+             "id: cat-shipping\ntype: category\ntitle: Shipping\nenabled: true")
+    monkeypatch.setattr(config_module.settings, "vault_path", str(tmp_path))
+    content_module._vault.clear()
+    content_module._vault.update(content_module.load_vault())
+    with TestClient(app) as client:
+        resp = client.get("/content?type=question&category=does-not-exist")
+        assert resp.status_code == 200
+        assert resp.json() == {"items": []}
+
+
+def test_list_missing_type_returns_400(tmp_path, monkeypatch):
+    """Listing endpoint requires `type` query parameter; empty or missing -> 400 with our detail."""
+    monkeypatch.setattr(config_module.settings, "vault_path", str(tmp_path))
+    content_module._vault.clear()
+    with TestClient(app) as client:
+        # Empty type=
+        resp = client.get("/content?type=")
+        assert resp.status_code == 400
+        assert resp.json() == {"detail": "type query parameter is required"}
+        # No query string at all — must reach the same handler (route ordering)
+        resp = client.get("/content")
+        assert resp.status_code == 400
+        assert resp.json() == {"detail": "type query parameter is required"}
