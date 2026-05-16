@@ -3,6 +3,11 @@ import express, { Request, Response, NextFunction } from "express";
 import axios from "axios";
 import crypto from "crypto";
 
+if (!process.env.FACEBOOK_VERIFY_TOKEN) {
+  console.error("FACEBOOK_VERIFY_TOKEN is not set — refusing to start. Configure it in messenger-bot/.env and restart.");
+  process.exit(1);
+}
+
 const app = express();
 
 const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN!;
