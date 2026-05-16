@@ -27,12 +27,12 @@ Customers can get instant product answers and reach a human through Messenger �
 
 **Version:** v1.1 (in progress)
 **Previous:** v1.0 shipped 2026-05-15 — feature-complete, awaiting production deployment
-**Status:** Defining requirements for v1.1 UX Polish & Hardening.
+**Status:** Phase 06 complete — four DEBT fixes hardened. Starting Phase 07 (helpfulness-feedback).
 
 **Codebase:**
-- `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~350 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator
+- `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~385 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator + DEBT-01–04 fixes
 - `app/routers/content.py` — FastAPI vault router (~120 LOC): content listing, single-item fetch, reload endpoint
-- 22 Node.js tests + 14 Python tests, all passing
+- 27 Node.js tests + 14 Python tests, all passing
 
 **Pending before launch:**
 - Production deployment (ngrok/hosting + Facebook App configuration)
@@ -52,12 +52,15 @@ Customers can get instant product answers and reach a human through Messenger �
 - ✓ Human escalation — Handover Protocol + admin Messenger notify + graceful fallback (ESC-01–04) — v1.0, Phase 4
 - ✓ Typing indicator before answers + full .env.example documentation (POLISH-01) — v1.0, Phase 5
 
+### Validated (v1.1, Phase 06)
+
+- ✓ Fix DEBT-01: Postback handler dispatches MENU_PRODUCT_HELP/MENU_MAIN — Phase 06
+- ✓ Fix DEBT-02: Per-event try/catch in webhook loop prevents crash on single bad event — Phase 06
+- ✓ Fix DEBT-03: VERIFY_TOKEN fail-fast guard at startup (process.exit(1) if unset) — Phase 06
+- ✓ Fix DEBT-04: All 7 non-Axios error branches sanitized — no token leak via log objects — Phase 06
+
 ### Active (v1.1)
 
-- [ ] Fix CR-01: Postback handler dispatches MENU_PRODUCT_HELP/MENU_MAIN from persistent menu
-- [ ] Fix CR-02: Webhook async loop wrapped in try/catch
-- [ ] Fix WR-01: VERIFY_TOKEN fail-fast validation at startup
-- [ ] Fix WR-05: Sanitize non-Axios error logs to prevent token leak
 - [ ] "Was this helpful?" quick reply after answers — No → escalation
 - [ ] Answer truncation (~200 chars) + "Read more" quick reply → full answer as follow-up
 - [ ] In-memory returning user memory — greet by name (per PSID Map)
