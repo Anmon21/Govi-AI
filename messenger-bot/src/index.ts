@@ -104,7 +104,11 @@ app.post(
 
     for (const entry of body.entry ?? []) {
       for (const event of entry.messaging ?? []) {
-        await handleWebhookEvent(event);
+        try {
+          await handleWebhookEvent(event);
+        } catch (err: unknown) {
+          console.error("handleWebhookEvent failed (unexpected):", err instanceof Error ? err.message : String(err));
+        }
       }
     }
   }
