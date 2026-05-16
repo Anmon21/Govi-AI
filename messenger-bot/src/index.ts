@@ -339,6 +339,16 @@ export async function handleWebhookEvent(event: any): Promise<void> {
     return;
   }
 
+  if (event.postback?.payload === "MENU_PRODUCT_HELP") {
+    await sendCategoryMenu(senderId);
+    return;
+  }
+
+  if (event.postback?.payload === "MENU_MAIN") {
+    await sendWelcomeMessage(senderId);
+    return;
+  }
+
   if (event.postback) {
     // Additional postback payloads handled in Phase 2+
     console.log("Postback received:", event.postback.payload);
