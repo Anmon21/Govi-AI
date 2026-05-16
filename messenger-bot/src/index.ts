@@ -141,7 +141,7 @@ export async function sendMessage(recipientId: string, text: string, quickReplie
     if (axios.isAxiosError(err)) {
       console.error("sendMessage failed:", err.message, err.response?.data);
     } else {
-      console.error("sendMessage failed (unexpected error):", err);
+      console.error("sendMessage failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
   }
 }
@@ -164,7 +164,7 @@ export async function passThreadControl(recipientId: string): Promise<void> {
     if (axios.isAxiosError(err)) {
       console.error("passThreadControl failed:", err.message, err.response?.data);
     } else {
-      console.error("passThreadControl failed (unexpected):", err);
+      console.error("passThreadControl failed (unexpected):", err instanceof Error ? err.message : String(err));
     }
   }
 }
@@ -187,7 +187,7 @@ export async function sendTypingIndicator(
     if (axios.isAxiosError(err)) {
       console.error("sendTypingIndicator failed:", err.message, err.response?.data);
     } else {
-      console.error("sendTypingIndicator failed (unexpected error):", err);
+      console.error("sendTypingIndicator failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
   }
 }
@@ -247,7 +247,7 @@ export async function sendCategoryMenu(recipientId: string): Promise<void> {
     if (axios.isAxiosError(err)) {
       console.error("sendCategoryMenu failed:", err.message, err.response?.data);
     } else {
-      console.error("sendCategoryMenu failed (unexpected error):", err);
+      console.error("sendCategoryMenu failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
     await sendApologyWithMenu(recipientId);
   }
@@ -281,7 +281,7 @@ export async function sendQuestionMenu(recipientId: string, categoryId: string):
     if (axios.isAxiosError(err)) {
       console.error("sendQuestionMenu failed:", err.message, err.response?.data);
     } else {
-      console.error("sendQuestionMenu failed (unexpected error):", err);
+      console.error("sendQuestionMenu failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
     await sendApologyWithMenu(recipientId);
   }
@@ -301,7 +301,7 @@ export async function sendAnswer(recipientId: string, questionId: string): Promi
     if (axios.isAxiosError(err)) {
       console.error("sendAnswer failed:", err.message, err.response?.data);
     } else {
-      console.error("sendAnswer failed (unexpected error):", err);
+      console.error("sendAnswer failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
     await sendApologyWithMenu(recipientId);
   } finally {
@@ -421,7 +421,7 @@ export async function setupMessengerProfile(): Promise<void> {
     if (axios.isAxiosError(err)) {
       console.error("Messenger profile setup failed:", err.message, err.response?.data);
     } else {
-      console.error("Messenger profile setup failed (unexpected error):", err);
+      console.error("Messenger profile setup failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
   }
 }
