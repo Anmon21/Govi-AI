@@ -10,6 +10,7 @@ import type {} from "../index";
 // Wave-0: verifySignature is not yet exported from ../index.
 // Tests skip gracefully until Plan 02 lands.
 // Set PORT=0 so index.ts binds to an OS-assigned port rather than conflicting with port 3000.
+process.env.FACEBOOK_VERIFY_TOKEN = "test-token";
 process.env.PORT = "0";
 
 type VerifyFn = (req: any, res: any, next: any) => void;

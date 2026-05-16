@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type {} from "../index";
 
+process.env.FACEBOOK_VERIFY_TOKEN = "test-token";
 process.env.PORT = "0";
 
 type EventFn = (event: any) => Promise<void>;

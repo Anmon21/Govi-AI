@@ -9,6 +9,7 @@ import type {} from "../index";
 // Wave-0: setupMessengerProfile is not yet exported from ../index.
 // Test skips gracefully until Plan 03 lands.
 // Set PORT=0 so index.ts binds to an OS-assigned port rather than conflicting with port 3000.
+process.env.FACEBOOK_VERIFY_TOKEN = "test-token";
 process.env.PORT = "0";
 
 type SetupFn = () => Promise<void>;
