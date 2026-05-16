@@ -42,7 +42,7 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
   4. An unexpected (non-Axios) error produces a log entry containing no raw error object and therefore cannot expose auth tokens
 **Plans**: 1 plan
 Plans:
-- [ ] 06-01-PLAN.md — Apply four surgical patches to messenger-bot/src/index.ts (DEBT-01 postback routing, DEBT-02 per-event try/catch, DEBT-03 VERIFY_TOKEN startup guard, DEBT-04 non-Axios log sanitization) plus a `debt-fixes.test.ts` covering DEBT-01/02/04
+- [x] 06-01-PLAN.md — Apply four surgical patches to messenger-bot/src/index.ts (DEBT-01 postback routing, DEBT-02 per-event try/catch, DEBT-03 VERIFY_TOKEN startup guard, DEBT-04 non-Axios log sanitization) plus a `debt-fixes.test.ts` covering DEBT-01/02/04
 
 ### Phase 7: Helpfulness Feedback
 **Goal**: Users can tell the bot whether an answer helped, receive a positive acknowledgment when satisfied, or be routed to a human agent when not
