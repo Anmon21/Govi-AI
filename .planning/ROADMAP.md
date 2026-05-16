@@ -40,7 +40,9 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
   2. An exception thrown inside the webhook async processing loop is caught, logged, and does not crash the bot process
   3. Starting the bot without VERIFY_TOKEN set exits immediately with a readable error message before accepting any connections
   4. An unexpected (non-Axios) error produces a log entry containing no raw error object and therefore cannot expose auth tokens
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 06-01-PLAN.md — Apply four surgical patches to messenger-bot/src/index.ts (DEBT-01 postback routing, DEBT-02 per-event try/catch, DEBT-03 VERIFY_TOKEN startup guard, DEBT-04 non-Axios log sanitization) plus a `debt-fixes.test.ts` covering DEBT-01/02/04
 
 ### Phase 7: Helpfulness Feedback
 **Goal**: Users can tell the bot whether an answer helped, receive a positive acknowledgment when satisfied, or be routed to a human agent when not
@@ -86,11 +88,11 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
 | 3. Product Q&A Flow | v1.0 | 2/2 | Complete | 2026-05-15 |
 | 4. Human Escalation | v1.0 | 2/2 | Complete | 2026-05-15 |
 | 5. Polish + Hardening | v1.0 | 2/2 | Complete | 2026-05-15 |
-| 6. Bug Fixes & Hardening | v1.1 | 0/? | Not started | - |
+| 6. Bug Fixes & Hardening | v1.1 | 0/1 | Planned | - |
 | 7. Helpfulness Feedback | v1.1 | 0/? | Not started | - |
 | 8. Answer Truncation | v1.1 | 0/? | Not started | - |
 | 9. User Memory & Personalization | v1.1 | 0/? | Not started | - |
 
 ---
 
-*Last updated: 2026-05-15 — v1.1 roadmap added (Phases 6–9)*
+*Last updated: 2026-05-16 — Phase 6 planned (1 plan)*
