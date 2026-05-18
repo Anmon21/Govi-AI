@@ -355,7 +355,7 @@ test("UX-03: HELPFUL_NO quick reply calls handleEscalation", async (t) => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the existing `qa-flow.test.ts` answer test need updating?**
    - What we know: Line 141 asserts `deepStrictEqual(msg?.quick_replies, MAIN_MENU_QUICK_REPLIES)` after a `QUESTION:` tap. After Phase 7, `sendAnswer` sends `FEEDBACK_QUICK_REPLIES`.
