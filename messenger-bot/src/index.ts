@@ -218,6 +218,14 @@ export const MAIN_MENU_QUICK_REPLIES: QuickReply[] = [
   { content_type: "text", title: "Contact Human", payload: "MENU_CONTACT_HUMAN" },
 ];
 
+export const FEEDBACK_QUICK_REPLIES: QuickReply[] = [
+  { content_type: "text", title: "Was it helpful? Yes", payload: "HELPFUL_YES" },
+  { content_type: "text", title: "Was it helpful? No",  payload: "HELPFUL_NO" },
+];
+
+export const PAYLOAD_HELPFUL_YES = "HELPFUL_YES";
+export const PAYLOAD_HELPFUL_NO  = "HELPFUL_NO";
+
 export const PAYLOAD_PREFIX_CATEGORY = "CATEGORY:";
 export const PAYLOAD_PREFIX_QUESTION = "QUESTION:";
 
@@ -300,7 +308,7 @@ export async function sendAnswer(recipientId: string, questionId: string): Promi
       await sendApologyWithMenu(recipientId);
       return;
     }
-    await sendMessage(recipientId, body, MAIN_MENU_QUICK_REPLIES);
+    await sendMessage(recipientId, body, FEEDBACK_QUICK_REPLIES);
   } catch (err: unknown) {
     if (axios.isAxiosError(err)) {
       console.error("sendAnswer failed:", err.message, err.response?.data);
@@ -388,6 +396,18 @@ export async function handleWebhookEvent(event: any): Promise<void> {
         await sendAnswer(senderId, questionId);
         return;
       }
+    }
+    if (payload === "HELPFUL_YES") {
+      await sendMessage(
+        senderId,
+        "Glad that helped! Let me know if you need anything else.",
+        MAIN_MENU_QUICK_REPLIES
+      );
+      return;
+    }
+    if (payload === "HELPFUL_NO") {
+      await handleEscalation(senderId);
+      return;
     }
     // Unknown / malformed payload — re-anchor instead of going silent
     await sendFallbackMessage(senderId);
