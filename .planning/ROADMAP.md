@@ -54,7 +54,7 @@ Plans:
   3. Tapping "No" immediately enters the escalation flow — same path as the explicit escalation option
 **Plans**: 1 plan
 Plans:
-- [ ] 07-01-PLAN.md — Add FEEDBACK_QUICK_REPLIES constant, swap sendAnswer quick replies, add HELPFUL_YES/HELPFUL_NO handler cases, write feedback.test.ts (UX-01, UX-02, UX-03)
+- [x] 07-01-PLAN.md — Add FEEDBACK_QUICK_REPLIES constant, swap sendAnswer quick replies, add HELPFUL_YES/HELPFUL_NO handler cases, write feedback.test.ts (UX-01, UX-02, UX-03)
 
 ### Phase 8: Answer Truncation
 **Goal**: Long answers are broken into a readable preview so the chat thread is not overwhelmed, and users can retrieve the full text on demand
