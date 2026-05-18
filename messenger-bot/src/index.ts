@@ -397,6 +397,18 @@ export async function handleWebhookEvent(event: any): Promise<void> {
         return;
       }
     }
+    if (payload === "HELPFUL_YES") {
+      await sendMessage(
+        senderId,
+        "Glad that helped! Let me know if you need anything else.",
+        MAIN_MENU_QUICK_REPLIES
+      );
+      return;
+    }
+    if (payload === "HELPFUL_NO") {
+      await handleEscalation(senderId);
+      return;
+    }
     // Unknown / malformed payload — re-anchor instead of going silent
     await sendFallbackMessage(senderId);
     return;
