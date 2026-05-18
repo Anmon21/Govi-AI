@@ -52,8 +52,9 @@ Plans:
   1. After every Q&A answer message, the user sees "Was this helpful?" with Yes and No quick reply buttons
   2. Tapping "Yes" shows a short thank-you message followed by the main menu
   3. Tapping "No" immediately enters the escalation flow — same path as the explicit escalation option
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — Add FEEDBACK_QUICK_REPLIES constant, swap sendAnswer quick replies, add HELPFUL_YES/HELPFUL_NO handler cases, write feedback.test.ts (UX-01, UX-02, UX-03)
 
 ### Phase 8: Answer Truncation
 **Goal**: Long answers are broken into a readable preview so the chat thread is not overwhelmed, and users can retrieve the full text on demand
@@ -89,10 +90,10 @@ Plans:
 | 4. Human Escalation | v1.0 | 2/2 | Complete | 2026-05-15 |
 | 5. Polish + Hardening | v1.0 | 2/2 | Complete | 2026-05-15 |
 | 6. Bug Fixes & Hardening | v1.1 | 0/1 | Planned | - |
-| 7. Helpfulness Feedback | v1.1 | 0/? | Not started | - |
+| 7. Helpfulness Feedback | v1.1 | 0/1 | Planned | - |
 | 8. Answer Truncation | v1.1 | 0/? | Not started | - |
 | 9. User Memory & Personalization | v1.1 | 0/? | Not started | - |
 
 ---
 
-*Last updated: 2026-05-16 — Phase 6 planned (1 plan)*
+*Last updated: 2026-05-18 — Phase 7 planned (1 plan)*
