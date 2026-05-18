@@ -15,6 +15,7 @@ type EventFn = (event: any) => Promise<void>;
 
 let handleWebhookEvent: EventFn | undefined;
 let MAIN_MENU_QUICK_REPLIES: any[] | undefined;
+let FEEDBACK_QUICK_REPLIES: any[] | undefined;
 // sendCategoryMenu is the sentinel for Task 2 implementation — tests skip until it is exported
 let _sendCategoryMenuExported = false;
 
@@ -23,10 +24,12 @@ try {
   const mod = require("../index");
   handleWebhookEvent = typeof mod.handleWebhookEvent === "function" ? mod.handleWebhookEvent as EventFn : undefined;
   MAIN_MENU_QUICK_REPLIES = Array.isArray(mod.MAIN_MENU_QUICK_REPLIES) ? mod.MAIN_MENU_QUICK_REPLIES : undefined;
+  FEEDBACK_QUICK_REPLIES = Array.isArray(mod.FEEDBACK_QUICK_REPLIES) ? mod.FEEDBACK_QUICK_REPLIES : undefined;
   _sendCategoryMenuExported = typeof mod.sendCategoryMenu === "function";
 } catch {
   handleWebhookEvent = undefined;
   MAIN_MENU_QUICK_REPLIES = undefined;
+  FEEDBACK_QUICK_REPLIES = undefined;
   _sendCategoryMenuExported = false;
 }
 
@@ -116,7 +119,7 @@ test("qa-flow: CATEGORY:<id> triggers sendQuestionMenu with QUESTION: payloads",
 });
 
 test("qa-flow: QUESTION:<id> triggers sendAnswer with body text and main menu re-anchor", async (t) => {
-  if (!handleWebhookEvent || !MAIN_MENU_QUICK_REPLIES || !_sendCategoryMenuExported) { t.skip("pending Plan 03-02 implementation"); return; }
+  if (!handleWebhookEvent || !MAIN_MENU_QUICK_REPLIES || !FEEDBACK_QUICK_REPLIES || !_sendCategoryMenuExported) { t.skip("pending Plan 03-02 implementation"); return; }
   const ANSWER_BODY = "Standard orders ship within 1-2 business days.";
   const stubs = withAxiosStubs({
     onGet: (url) => {
@@ -138,8 +141,8 @@ test("qa-flow: QUESTION:<id> triggers sendAnswer with body text and main menu re
     assert.ok(stubs.postCalls[2].body?.sender_action === "typing_off", "typing_off must be the third POST (after sendMessage resolves)");
     const msg = stubs.postCalls[1].body?.message;
     assert.strictEqual(msg?.text, ANSWER_BODY, "message text must equal the answer body");
-    assert.deepStrictEqual(msg?.quick_replies, MAIN_MENU_QUICK_REPLIES,
-      "main menu quick replies must be re-attached after every answer");
+    assert.deepStrictEqual(msg?.quick_replies, FEEDBACK_QUICK_REPLIES,
+      "feedback quick replies must be attached after every answer");
   } finally { stubs.restore(); }
 });
 
