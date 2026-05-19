@@ -64,7 +64,9 @@ Plans:
   1. An answer longer than ~200 characters is sent as a truncated message ending with "..." and a "Read more" quick reply button
   2. Tapping "Read more" sends the complete, untruncated answer text as a follow-up message
   3. Answers at or under ~200 characters are delivered as-is with no truncation or "Read more" button
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 08-01-PLAN.md — Add ANSWER_THRESHOLD + PAYLOAD_PREFIX_READ_MORE constants, modify sendAnswer with word-boundary truncation branch, add sendReadMoreAnswer function, add READ_MORE: dispatch case in handleWebhookEvent, write truncation.test.ts with 9 cases (UX-04, UX-05)
 **UI hint**: yes
 
 ### Phase 9: User Memory & Personalization
@@ -91,9 +93,9 @@ Plans:
 | 5. Polish + Hardening | v1.0 | 2/2 | Complete | 2026-05-15 |
 | 6. Bug Fixes & Hardening | v1.1 | 0/1 | Planned | - |
 | 7. Helpfulness Feedback | v1.1 | 0/1 | Planned | - |
-| 8. Answer Truncation | v1.1 | 0/? | Not started | - |
+| 8. Answer Truncation | v1.1 | 0/1 | Planned | - |
 | 9. User Memory & Personalization | v1.1 | 0/? | Not started | - |
 
 ---
 
-*Last updated: 2026-05-18 — Phase 7 planned (1 plan)*
+*Last updated: 2026-05-19 — Phase 8 planned (1 plan)*
