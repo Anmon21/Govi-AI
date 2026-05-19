@@ -66,7 +66,7 @@ Plans:
   3. Answers at or under ~200 characters are delivered as-is with no truncation or "Read more" button
 **Plans**: 1 plan
 Plans:
-- [ ] 08-01-PLAN.md — Add ANSWER_THRESHOLD + PAYLOAD_PREFIX_READ_MORE constants, modify sendAnswer with word-boundary truncation branch, add sendReadMoreAnswer function, add READ_MORE: dispatch case in handleWebhookEvent, write truncation.test.ts with 9 cases (UX-04, UX-05)
+- [x] 08-01-PLAN.md — Add ANSWER_THRESHOLD + PAYLOAD_PREFIX_READ_MORE constants, modify sendAnswer with word-boundary truncation branch, add sendReadMoreAnswer function, add READ_MORE: dispatch case in handleWebhookEvent, write truncation.test.ts with 9 cases (UX-04, UX-05)
 **UI hint**: yes
 
 ### Phase 9: User Memory & Personalization
