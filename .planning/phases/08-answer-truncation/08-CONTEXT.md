@@ -15,8 +15,8 @@ Modify `sendAnswer` in `messenger-bot/src/index.ts` so answers longer than ~200 
 
 ### Pre-decided (from prior phases / project planning)
 
-- **D-01:** "Read more" sends the full answer as a follow-up message — not an external URL. Vault entries have no URL field; follow-up message is simpler.
-- **D-02:** Threshold is ~200 characters. Answers at or under the threshold are delivered as-is with no truncation and no "Read more" button.
+- **D-01 [informational]:** "Read more" sends the full answer as a follow-up message — not an external URL. Vault entries have no URL field; follow-up message is simpler.
+- **D-02 [informational]:** Threshold is ~200 characters. Answers at or under the threshold are delivered as-is with no truncation and no "Read more" button.
 
 ### Claude's Discretion
 
