@@ -228,6 +228,8 @@ export const PAYLOAD_HELPFUL_NO  = "HELPFUL_NO";
 
 export const PAYLOAD_PREFIX_CATEGORY = "CATEGORY:";
 export const PAYLOAD_PREFIX_QUESTION = "QUESTION:";
+export const ANSWER_THRESHOLD = 200;
+export const PAYLOAD_PREFIX_READ_MORE = "READ_MORE:";
 
 async function sendApologyWithMenu(recipientId: string): Promise<void> {
   await sendMessage(
@@ -308,12 +310,45 @@ export async function sendAnswer(recipientId: string, questionId: string): Promi
       await sendApologyWithMenu(recipientId);
       return;
     }
-    await sendMessage(recipientId, body, FEEDBACK_QUICK_REPLIES);
+    if (body.length > ANSWER_THRESHOLD) {
+      const cutIndex = body.lastIndexOf(" ", ANSWER_THRESHOLD);
+      const preview = cutIndex > 0 ? body.slice(0, cutIndex) + "..." : body.slice(0, ANSWER_THRESHOLD) + "...";
+      const readMoreReply: QuickReply = {
+        content_type: "text",
+        title: "Read more",
+        payload: `${PAYLOAD_PREFIX_READ_MORE}${questionId}`,
+      };
+      await sendMessage(recipientId, preview, [readMoreReply]);
+    } else {
+      await sendMessage(recipientId, body, FEEDBACK_QUICK_REPLIES);
+    }
   } catch (err: unknown) {
     if (axios.isAxiosError(err)) {
       console.error("sendAnswer failed:", err.message, err.response?.data);
     } else {
       console.error("sendAnswer failed (unexpected error):", err instanceof Error ? err.message : String(err));
+    }
+    await sendApologyWithMenu(recipientId);
+  } finally {
+    await sendTypingIndicator(recipientId, "typing_off");
+  }
+}
+
+export async function sendReadMoreAnswer(recipientId: string, questionId: string): Promise<void> {
+  await sendTypingIndicator(recipientId, "typing_on");
+  try {
+    const response = await axios.get(`${GOVI_AI_URL}/content/${encodeURIComponent(questionId)}`);
+    const body: string | undefined = response.data?.body;
+    if (typeof body !== "string" || body.length === 0) {
+      await sendApologyWithMenu(recipientId);
+      return;
+    }
+    await sendMessage(recipientId, body, FEEDBACK_QUICK_REPLIES);
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      console.error("sendReadMoreAnswer failed:", err.message, err.response?.data);
+    } else {
+      console.error("sendReadMoreAnswer failed (unexpected error):", err instanceof Error ? err.message : String(err));
     }
     await sendApologyWithMenu(recipientId);
   } finally {
@@ -394,6 +429,13 @@ export async function handleWebhookEvent(event: any): Promise<void> {
       const questionId = payload.slice(PAYLOAD_PREFIX_QUESTION.length);
       if (questionId) {
         await sendAnswer(senderId, questionId);
+        return;
+      }
+    }
+    if (payload.startsWith(PAYLOAD_PREFIX_READ_MORE)) {
+      const questionId = payload.slice(PAYLOAD_PREFIX_READ_MORE.length);
+      if (questionId) {
+        await sendReadMoreAnswer(senderId, questionId);
         return;
       }
     }
