@@ -25,14 +25,14 @@ Customers can get instant product answers and reach a human through Messenger �
 
 ## Current State
 
-**Version:** v1.1 (in progress)
-**Previous:** v1.0 shipped 2026-05-15 — feature-complete, awaiting production deployment
-**Status:** Phase 06 complete — four DEBT fixes hardened. Starting Phase 07 (helpfulness-feedback).
+**Version:** v1.1 (milestone complete — awaiting production deployment)
+**Previous:** v1.0 shipped 2026-05-15 — feature-complete
+**Status:** Phase 09 complete — personalized greetings via in-memory name cache (UX-06, UX-07). All v1.1 phases done.
 
 **Codebase:**
-- `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~385 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator + DEBT-01–04 fixes
+- `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~420 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator, DEBT-01–04 fixes, personalized greetings
 - `app/routers/content.py` — FastAPI vault router (~120 LOC): content listing, single-item fetch, reload endpoint
-- 27 Node.js tests + 14 Python tests, all passing
+- 50 Node.js tests, all passing
 
 **Pending before launch:**
 - Production deployment (ngrok/hosting + Facebook App configuration)
@@ -125,4 +125,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-15 — v1.1 milestone started*
+*Last updated: 2026-05-20 — Phase 09 complete, v1.1 milestone done*
