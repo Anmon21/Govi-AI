@@ -84,6 +84,8 @@ test("DEBT-01: MENU_MAIN postback routes to sendWelcomeMessage", async (t) => {
 });
 
 // Test C (DEBT-01c — negative): UNKNOWN_XYZ postback makes zero axios calls (D-02 silent-drop preserved)
+// Phase 9 note: handleWebhookEvent now calls fetchUserName (graph.facebook.com GET) for unknown PSIDs.
+// The assertion checks only Govi AI calls — Graph API name-fetch calls are expected and excluded.
 test("DEBT-01: unknown postback payload is silently dropped — no axios calls", async (t) => {
   if (!handleWebhookEvent) {
     t.skip("handleWebhookEvent not exported");
@@ -102,7 +104,9 @@ test("DEBT-01: unknown postback payload is silently dropped — no axios calls",
   try {
     await handleWebhookEvent({ postback: { payload: "UNKNOWN_XYZ" }, sender: { id: "USR_C" } });
     assert.strictEqual(postCalls.length, 0, "unknown postback should make zero axios.post calls");
-    assert.strictEqual(getCalls.length, 0, "unknown postback should make zero axios.get calls");
+    // Phase 9: fetchUserName triggers one graph.facebook.com GET for unknown PSIDs — expected behavior
+    const goviAiCalls = getCalls.filter((url) => !url.includes("graph.facebook.com"));
+    assert.strictEqual(goviAiCalls.length, 0, "unknown postback should make zero Govi AI axios.get calls");
   } finally {
     axios.post = originalPost;
     axios.get = originalGet;

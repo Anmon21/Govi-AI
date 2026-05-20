@@ -117,6 +117,26 @@ app.post(
 export const GRAPH_API_VERSION = "v21.0";
 export const PAGE_INBOX_APP_ID = "263902037430900";
 export const lastMessageCache = new Map<string, string>();
+export const userNameCache = new Map<string, string>();
+
+export async function fetchUserName(psid: string): Promise<void> {
+  try {
+    const response = await axios.get(
+      `https://graph.facebook.com/${GRAPH_API_VERSION}/${psid}`,
+      { params: { fields: "first_name", access_token: PAGE_ACCESS_TOKEN } }
+    );
+    const firstName: string = response.data?.first_name ?? "";
+    userNameCache.set(psid, firstName);
+  } catch (err: unknown) {
+    // SEC-03: never log the full axios error (config.url contains PAGE_ACCESS_TOKEN)
+    if (axios.isAxiosError(err)) {
+      console.error("fetchUserName failed:", err.message, err.response?.data);
+    } else {
+      console.error("fetchUserName failed (unexpected):", err instanceof Error ? err.message : String(err));
+    }
+    userNameCache.set(psid, "");
+  }
+}
 
 export async function sendMessage(recipientId: string, text: string, quickReplies?: QuickReply[]): Promise<void> {
   const messagePayload: Record<string, unknown> = { text };
@@ -357,11 +377,11 @@ export async function sendReadMoreAnswer(recipientId: string, questionId: string
 }
 
 export async function sendWelcomeMessage(recipientId: string): Promise<void> {
-  await sendMessage(
-    recipientId,
-    "Welcome to Govi! I can help with product questions or connect you with a human.",
-    MAIN_MENU_QUICK_REPLIES
-  );
+  const firstName = userNameCache.get(recipientId);
+  const text = firstName
+    ? `Welcome back, ${firstName}! How can I help you today?`
+    : "Welcome to Govi! I can help with product questions or connect you with a human.";
+  await sendMessage(recipientId, text, MAIN_MENU_QUICK_REPLIES);
 }
 
 export async function sendFallbackMessage(recipientId: string): Promise<void> {
@@ -375,6 +395,10 @@ export async function sendFallbackMessage(recipientId: string): Promise<void> {
 export async function handleWebhookEvent(event: any): Promise<void> {
   const senderId: string = event.sender?.id;
   if (!senderId) return;
+
+  if (!userNameCache.has(senderId)) {
+    await fetchUserName(senderId);
+  }
 
   if (event.postback?.payload === "GET_STARTED") {
     await sendWelcomeMessage(senderId);
