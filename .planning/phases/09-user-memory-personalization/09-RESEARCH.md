@@ -482,17 +482,19 @@ function withAxiosStubs(opts: { onGet?: (url: string) => any; onPost?: (url: str
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the deployed app have Business Asset User Profile Access?**
    - What we know: The feature requires App Review. Without it, the Graph API returns `{}` (empty object, not error). The bot handles this gracefully.
    - What's unclear: Whether the current Govi Facebook app has completed App Review for this feature.
    - Recommendation: Document in VERIFICATION.md as a human-UAT step. The feature degrades silently — test by checking whether the greeting includes the name after interacting from a known account.
+   - **RESOLUTION:** Unverifiable locally; documented as manual-UAT step in VALIDATION.md — acceptable. Bot degrades silently if access is not approved; no code change required.
 
 2. **Do existing tests need `axios.get` stub updates?**
    - What we know: After Phase 9 lands, every `handleWebhookEvent` call for an unknown PSID triggers `fetchUserName` which calls `axios.get`. All existing test files use per-test PSIDs like `"USR_1"`, `"USR_X"`.
    - What's unclear: Whether any test reuses a PSID across `test()` blocks within the same file (which would cause the second invocation to skip the fetch). Given module-level Map state persists within a test file's `require` session, the first test to use a PSID populates the cache for subsequent tests in the same run.
    - Recommendation: The planner should include a task to audit existing test files and ensure their `withAxiosStubs` handlers return `{ data: {} }` for Graph API URLs (the `onGet` default already returns `{ data: {} }` in all existing stubs, which correctly produces empty-object behavior for the name fetch). This is likely already handled but should be verified.
+   - **RESOLUTION:** Existing `withAxiosStubs` default `onGet` returns `{ data: {} }` for all URLs — this correctly handles the Graph API GET for unknown PSIDs (produces empty-object response, sentinel `""` stored). No stub updates required in existing test files.
 
 ---
 
