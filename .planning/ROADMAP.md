@@ -79,7 +79,7 @@ Plans:
   3. If the Graph API call fails or returns no name, the bot falls back to a generic greeting without surfacing an error to the user
 **Plans**: 1 plan
 Plans:
-- [ ] 09-01-PLAN.md — Add userNameCache Map, fetchUserName helper with sentinel pattern, fetch-once guard in handleWebhookEvent, updated sendWelcomeMessage with name branch, write personalization.test.ts with 8 cases (UX-06, UX-07)
+- [x] 09-01-PLAN.md — Add userNameCache Map, fetchUserName helper with sentinel pattern, fetch-once guard in handleWebhookEvent, updated sendWelcomeMessage with name branch, write personalization.test.ts with 8 cases (UX-06, UX-07)
 **UI hint**: yes
 
 ---
