@@ -77,7 +77,9 @@ Plans:
   1. On a user's first interaction, the bot fetches their first name from the Graph API and stores it in an in-memory Map keyed by PSID
   2. On a subsequent Get Started or welcome trigger from the same PSID, the greeting message includes the user's first name
   3. If the Graph API call fails or returns no name, the bot falls back to a generic greeting without surfacing an error to the user
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 09-01-PLAN.md — Add userNameCache Map, fetchUserName helper with sentinel pattern, fetch-once guard in handleWebhookEvent, updated sendWelcomeMessage with name branch, write personalization.test.ts with 8 cases (UX-06, UX-07)
 **UI hint**: yes
 
 ---
@@ -94,8 +96,8 @@ Plans:
 | 6. Bug Fixes & Hardening | v1.1 | 0/1 | Planned | - |
 | 7. Helpfulness Feedback | v1.1 | 0/1 | Planned | - |
 | 8. Answer Truncation | v1.1 | 0/1 | Planned | - |
-| 9. User Memory & Personalization | v1.1 | 0/? | Not started | - |
+| 9. User Memory & Personalization | v1.1 | 0/1 | Planned | - |
 
 ---
 
-*Last updated: 2026-05-19 — Phase 8 planned (1 plan)*
+*Last updated: 2026-05-20 — Phase 9 planned (1 plan)*
