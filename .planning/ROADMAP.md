@@ -104,7 +104,11 @@ Plans:
   2. The database opens in WAL mode with a 5-second busy_timeout so concurrent reads and writes do not deadlock
   3. A Fernet key loaded from environment can encrypt and decrypt a sample token string round-trip without data loss
   4. The existing FastAPI content endpoints return the same responses as before this phase (no regression)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 10-01-PLAN.md — Wave 0 test scaffold + app/db.py (get_connection + init_schema for tenants/pages/page_configs/qa_items with WAL, busy_timeout, FKs)
+- [ ] 10-02-PLAN.md — Settings db_path/fernet_key + cryptography dependency + .env.example + app/crypto.py Fernet helpers + test_fernet_round_trip
+- [ ] 10-03-PLAN.md — scripts/init_db.py CLI runner + .gitignore SQLite sidecars + human no-regression checkpoint on /health and /content endpoints
 
 ### Phase 11: Auth & Tenant Management API
 **Goal**: A super-admin can log in and manage client accounts via FastAPI endpoints secured by JWT — clients see only their own data
@@ -180,7 +184,7 @@ Plans:
 | 7. Helpfulness Feedback | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 8. Answer Truncation | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 9. User Memory & Personalization | v1.1 | 1/1 | Complete | 2026-05-20 |
-| 10. DB Foundation | v1.2 | 0/? | Not started | - |
+| 10. DB Foundation | v1.2 | 0/3 | Planning | - |
 | 11. Auth & Tenant Management API | v1.2 | 0/? | Not started | - |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 0/? | Not started | - |
 | 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
