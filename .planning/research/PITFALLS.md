@@ -1,245 +1,281 @@
-# Pitfalls Research
+# Pitfalls Research — v1.2 Admin Panel & Multi-Page Support
 
 **Project:** Govi Facebook Messenger Customer Support Bot
-**Domain:** Rule-based Messenger chatbot with local filesystem (Obsidian vault) content
-**Researched:** 2026-05-14
-**Overall confidence:** HIGH (platform limits are well-documented; filesystem pitfalls are deterministic engineering problems)
+**Domain:** Adding multi-tenant admin panel + Facebook OAuth Page connection + DB-backed content to an existing single-page rule-based Messenger bot
+**Researched:** 2026-05-27
+**Overall confidence:** HIGH (platform constraints are well-documented; SQLite/Node.js multi-tenant patterns are well-established engineering problems)
 
 ---
 
-## Facebook Messenger Platform Gotchas
+## Critical Pitfalls
 
-### No Webhook Signature Verification (Already Missing in Existing Code)
-
-The existing `messenger-bot/src/index.ts` receives POST `/webhook` and immediately processes it without verifying the `X-Hub-Signature-256` header that Facebook sends with every webhook delivery. Any actor who discovers the webhook URL can send forged events — fake messages, fake postbacks — that the bot will process as real.
-
-- Warning signs: No `crypto.createHmac` import anywhere in `index.ts`; no reference to `X-Hub-Signature` in the handler.
-- Prevention: Before processing any event, compute `HMAC-SHA256(rawBody, APP_SECRET)` and compare with the header value. Must use the raw request body bytes — `express.json()` parses before you can access raw bytes, so you need `express.raw({ type: 'application/json' })` or capture raw body via a middleware before JSON parsing. Store `FACEBOOK_APP_SECRET` in `.env`.
-- Phase to address: Phase 1 (webhook hardening, before any new menu logic is added)
-
-### 20-Second Webhook Response Timeout — Async Work After 200 OK
-
-Facebook requires the webhook endpoint to return HTTP 200 within 20 seconds, or it will retry the delivery (up to several times, causing duplicate event processing). The existing code already handles this correctly — it calls `res.sendStatus(200)` before the async work — but this pattern must be preserved when the rule-based flow replaces the AI call.
-
-- Warning signs: Moving business logic before `res.sendStatus(200)`; synchronous file reads inside the response path before the 200 is sent; awaiting the FastAPI call before responding.
-- Prevention: Always send 200 first, then process. Use `setImmediate` or just rely on the fire-and-forget pattern that already exists. Mark any refactor of the handler with a comment: "200 must fire before any await."
-- Phase to address: Phase 1 (preserve during refactor; add a code comment)
-
-### Duplicate Event Delivery (Retry Storm)
-
-If the bot returns a non-200, or times out, Facebook retries the same event. For stateful menu flows, processing the same postback twice can corrupt conversation state — e.g., advancing the menu twice or sending duplicate messages.
-
-- Warning signs: Users reporting double responses; logs showing the same `mid` (message ID) processed multiple times; bot state jumping two steps at once.
-- Prevention: Log processed message IDs (`mid`) in a short-lived store (in-memory Map with a TTL, or Redis later). On receipt, check if `mid` was already processed; if yes, skip and return 200 silently. For a low-traffic bot, an in-memory Map with a 60-second window is sufficient.
-- Phase to address: Phase 2 (when stateful menu flows are introduced)
-
-### Postback Payload Size Limit (1000 characters)
-
-Messenger button postback payloads are capped at 1000 characters. If menu state or routing identifiers are embedded in the payload string (e.g., serialized JSON like `{"category":"products","item":"SKU-12345","depth":3}`), it is easy to exceed this silently — Facebook truncates or rejects the button.
-
-- Warning signs: Buttons that visually render but don't fire the postback; payload strings approaching 200+ characters when serialized; nested JSON in payloads.
-- Prevention: Use short opaque identifiers in payloads (e.g., `MENU_PRODUCTS_LIST`, `QA_42`) and resolve them server-side against the vault content. Never embed full content or deep state in the payload itself.
-- Phase to address: Phase 2 (menu flow design)
-
-### Quick Reply Limit (13 per message, title 20 characters)
-
-Messenger enforces a maximum of 13 quick replies per message, and each title is capped at 20 characters (truncated silently if exceeded). A menu with more than 13 options, or with long product category names, will be silently truncated on the user's screen.
-
-- Warning signs: Vault files with more than 13 options at any menu level; category names longer than 20 characters in markdown headings used as menu labels.
-- Prevention: Enforce these limits in the content-loading layer when parsing vault files. If a menu level has more than 13 options, paginate (add a "See more" quick reply). Validate title lengths when loading vault content and warn/truncate with logging.
-- Phase to address: Phase 2 (menu rendering); Phase 3 (vault parser must validate counts and lengths)
-
-### Button Template Limits (3 buttons per template, 640-character message bubble)
-
-Generic templates support a maximum of 3 buttons. Text messages are limited to 640 characters. If Q&A answers from the vault are pasted as long paragraphs, they will be silently truncated in the Messenger UI.
-
-- Warning signs: Answers in vault files exceeding a paragraph; designers requesting more than 3 action buttons on a card.
-- Prevention: Enforce a maximum answer length (e.g., 600 characters) in the vault content spec. Document this constraint in the vault authoring guide. For longer answers, split into multiple messages sent sequentially.
-- Phase to address: Phase 3 (vault content format spec)
-
-### Messaging Outside the 24-Hour Window (Policy Violation)
-
-Facebook's Messenger Platform policy prohibits sending messages to a user more than 24 hours after their last interaction, except via approved Message Tags. For a customer support bot, the human escalation notification to the admin should use the `CUSTOMER_FEEDBACK` or `POST_PURCHASE_UPDATE` tag if the original conversation is older than 24 hours — otherwise the send will fail silently with a policy error in the Graph API response body (not an HTTP error).
-
-- Warning signs: Admin notification messages failing silently in logs; `error code 10` or `error subcode 2018065` in the Facebook API response.
-- Prevention: For the human escalation flow, send the admin Messenger notification immediately within the same 24-hour window. Log and surface API error bodies — the current `sendMessage` swallows Graph API errors because axios only throws on HTTP status errors, not on `{"error": {...}}` in a 200 response body.
-- Phase to address: Phase 4 (human escalation); also fix `sendMessage` to check `data.error` in Phase 1
-
-### Graph API Error Bodies Inside HTTP 200
-
-The Facebook Graph API returns HTTP 200 even when the message send fails — the actual error is in the JSON body as `{ "error": { "code": ..., "message": ... } }`. The existing `sendMessage` function does not check for this, so send failures are silently swallowed.
-
-- Warning signs: Users not receiving bot responses; no errors logged but messages not delivered; rate limit errors invisible in logs.
-- Prevention: After `axios.post(...)`, check if `data.error` exists and throw or log explicitly. Wrap `sendMessage` in a helper that validates the response body.
-- Phase to address: Phase 1 (fix before any new logic is built on top of broken error handling)
+Mistakes that cause rewrites or major incidents.
 
 ---
 
-## Rule-Based Conversation Flow Pitfalls
+### Pitfall 1: Page Access Token Derived from User Token — Invalidated When Admin Loses Page Role
 
-### Stateless Webhook With No Session Store
+**What goes wrong:** The Facebook OAuth flow for connecting a Page yields a Page Access Token that is derived from the connecting user's access token. That user must hold an admin, editor, or moderator role on the Page. If they later lose that role, revoke the app's permissions, change their Facebook password, or the user account is disabled, the stored Page Access Token becomes invalid immediately. The bot silently stops sending messages — Facebook returns error code `190` (OAuthException) inside an HTTP 200 response body, which the current `sendMessage` implementation does not catch.
 
-Each HTTP request to the webhook is stateless. There is no built-in mechanism to remember where a user is in the menu tree between messages. If session state is stored only in memory as a plain JS object (`const sessions = {}`), it works fine on a single process but is lost on every server restart and does not scale past one process.
+**Why it happens:** The stored token is not a permanent credential — it is a capability tied to a specific human's relationship with both the Page and the Facebook App. Developers store it as if it were a static API key and never implement token health checks.
 
-- Warning signs: Users losing their menu position after bot restart; tests passing locally but breaking under load (multiple processes); "start over" behavior on every message.
-- Prevention: For v1 (single-process, low traffic), an in-memory Map is acceptable with explicit documentation of the limitation. Use `Map<senderId, SessionState>` with a TTL (e.g., 30-minute inactivity timeout) to prevent unbounded growth. Document that a process restart resets all sessions — acceptable for a support bot where users can simply start over. If the deployment ever moves to multiple workers, migrate to Redis.
-- Phase to address: Phase 2 (state management design decision, document the tradeoff explicitly)
+**Consequences:** The bot goes dark for that client's Page. No alert is raised because Facebook Graph API errors are in the response body (HTTP 200), not as HTTP errors. Admins don't notice until customers complain. The only fix is to have the client re-authenticate via OAuth.
 
-### Treating Text Messages and Postbacks as the Same Code Path
+**Prevention:**
+- Implement a token health-check job that calls `GET /{page-id}?access_token={token}` once per hour for each stored token. If it returns error code 190, mark the Page as `token_invalid` in the DB and alert the tenant via the admin panel.
+- Show a "Page Disconnected — Reconnect" banner in the admin panel when token status is `invalid`.
+- Store the `user_id` that granted the token so you can identify which user needs to re-authorize.
+- Prefer system-user tokens via Meta Business Manager for production deployments where a human page admin leaving shouldn't break the integration — but this requires Meta Business Manager setup.
 
-Users can type free text at any point even inside a menu flow. The current code only handles `event.message?.text` and ignores postbacks entirely. A rule-based menu relies on structured postbacks (button presses) for navigation, but users will also type things. Conflating the two leads to menus breaking when users type "yes" instead of pressing a button.
+**Detection:** Error code `190` or `463` in Graph API response bodies; `pages_messaging` permission absent in token debug response.
 
-- Warning signs: No handling of `event.postback` in the webhook handler; no separate branch for `message.quick_reply`; text handler treating all text as navigation input.
-- Prevention: Separate event dispatch at the top of the handler: `if (event.postback)` → postback handler; `else if (event.message?.quick_reply)` → quick reply handler (use `quick_reply.payload`, not `message.text`); `else if (event.message?.text)` → free text handler (return a gentle "please use the menu" message or re-show the current menu state).
-- Phase to address: Phase 2 (event dispatcher refactor)
-
-### Menu State Encoding in Postback Payload Instead of Session
-
-Encoding full navigation state in the postback payload (e.g., `MENU_L1_PRODUCTS_L2_ACCESSORIES_L3_CABLES`) makes payloads grow with depth, hits the 1000-character limit, and makes it impossible to know what menu the user is actually on when they press an old button from a previous message.
-
-- Warning signs: Payload strings that encode path history; logic that reconstructs state entirely from the payload without consulting a session store.
-- Prevention: Store current menu state in the session (keyed by sender ID). Postback payloads should be flat action identifiers (`SELECT_CATEGORY_PRODUCTS`). The session store holds where they are; the payload says what they just did.
-- Phase to address: Phase 2
-
-### Old Buttons Remaining Tappable in Chat History
-
-Messenger does not disable buttons from previous messages. A user can scroll up and press a button from an earlier message in the conversation, sending a postback that is now out of context with their current session state. This can reset or corrupt menu navigation unexpectedly.
-
-- Warning signs: Users reporting the bot "going backwards"; session state jumping to an earlier menu position; logs showing a postback payload that doesn't match the current session state.
-- Prevention: Design postback payloads to be idempotent for the user's benefit — if a user presses an old "Back to Main Menu" button, the bot should treat it gracefully rather than erroring. Avoid payloads that assume a specific prior state. Validate the current session state when a postback arrives and handle the "stale button" case explicitly (e.g., "Let's start fresh" + show main menu).
-- Phase to address: Phase 2
+**Phase to address:** Phase 1 of v1.2 (OAuth flow implementation — build health check alongside token storage, not after).
 
 ---
 
-## Obsidian Vault File Reading Pitfalls
+### Pitfall 2: Short-Lived User Token Stored Instead of Long-Lived Page Token
 
-### Assuming Vault Path Exists at Startup
+**What goes wrong:** The Facebook OAuth callback returns a short-lived user access token (valid ~1–2 hours). From this token you must exchange to a long-lived user token (60 days) and then call `/{user-id}/accounts` to get the long-lived Page Access Token (no expiry). If you store the short-lived token directly (or store the intermediate 60-day token), Page calls start failing within hours or days with no obvious error.
 
-If `VAULT_PATH` is configured but the directory does not exist (e.g., on a new deployment, the vault path is wrong, or the drive is unmounted), FastAPI will start successfully but fail at runtime when the first content request arrives. This produces an opaque 500 error with no useful message to the operator.
+**Why it happens:** OAuth guides often stop at step 1 (the initial code exchange). The 3-step process (short-lived user → long-lived user → Page token) is under-documented. Developers test immediately after OAuth, see it working, and ship. Failure surfaces after the initial valid period.
 
-- Warning signs: `FileNotFoundError` or `OSError` on first content request rather than at startup; `VAULT_PATH` not validated in `config.py`; no health check that verifies vault accessibility.
-- Prevention: At startup, validate that `VAULT_PATH` is set, the directory exists, and is readable. Fail fast with a clear error message: `"Vault path '/path/to/vault' does not exist or is not readable"`. Add vault accessibility to the `/health` endpoint response.
-- Phase to address: Phase 3 (vault integration)
+**Consequences:** Stored tokens expire. The bot fails for all clients who connected their pages. Full re-authentication required for every client.
 
-### Obsidian Wikilinks Breaking Standard Markdown Parsers
+**Prevention:**
+- The token exchange pipeline must be: `code → short-lived user token → long-lived user token (60-day) → /{user-id}/accounts → long-lived Page Access Token`.
+- Never store the short-lived token or the intermediate user token. Store only the Page Access Token returned from `/{user-id}/accounts`.
+- Verify by calling `GET /debug_token?input_token={token}&access_token={app_id}|{app_secret}` before persisting — check `expires_at` in the response. A Page Token from a long-lived user token should return `expires_at: 0` (non-expiring).
+- Log the `token_type` and `expires_at` fields in the DB alongside the token for debugging.
 
-Obsidian uses `[[Page Name]]` wikilink syntax and `![[image.png]]` embed syntax that are not valid CommonMark. Any standard Python markdown parser (`markdown`, `mistune`, `python-markdown2`) will fail to parse these correctly — wikilinks will be passed through as literal text or cause parse errors.
+**Detection:** `expires_at` field in DB is non-zero; token debug returns `data.expires_at > 0`.
 
-- Warning signs: Wikilink syntax appearing as raw `[[...]]` text in API responses; linked pages not being followed; `![[embed]]` appearing in answers verbatim.
-- Prevention: Either (a) strip wikilinks before parsing (regex: `\[\[([^\]|]+)(?:\|[^\]]+)?\]\]` → extract display text or page name), or (b) use a vault-aware parser like `obsidian-md` patterns. For a Q&A content model, the simplest approach is to design vault files to avoid wikilinks in answer text — document this constraint in the content authoring guide.
-- Phase to address: Phase 3
-
-### Frontmatter YAML Parsing Inconsistency
-
-Obsidian files commonly start with YAML frontmatter delimited by `---`. Standard markdown parsers do not strip frontmatter — it appears as the first paragraph of content. If Q&A files use frontmatter for metadata (tags, category, order), the parser must explicitly strip and parse it before processing content.
-
-- Warning signs: YAML frontmatter appearing as the first line of answer text (e.g., `---` at the start of responses); `tags:` and `category:` appearing in menu labels.
-- Prevention: Use `python-frontmatter` library to parse vault files. It correctly splits frontmatter from body content. Make frontmatter the canonical place for menu metadata (category, order, enabled flag) and body text the answer content.
-- Phase to address: Phase 3
-
-### File Encoding Assumptions (BOM, Non-UTF-8)
-
-Obsidian saves files as UTF-8 without BOM on macOS by default, but files created by other apps or synced from Windows may have a UTF-8 BOM (`\xef\xbb\xbf`) or Windows line endings (`\r\n`). `open(path, 'r')` on macOS uses UTF-8 by default, but if even one file has a BOM, the YAML frontmatter parser will fail because `---` becomes `\xef\xbb\xbf---`.
-
-- Warning signs: Frontmatter parser failing on specific files but not others; "invalid start byte" errors; `\r` appearing in parsed content.
-- Prevention: Always open vault files with `open(path, 'r', encoding='utf-8-sig')` — the `utf-8-sig` codec strips the BOM if present and reads plain UTF-8 otherwise. Normalize line endings with `.replace('\r\n', '\n')`.
-- Phase to address: Phase 3
-
-### Vault Structure Drift (Files Renamed/Moved Break Bot)
-
-The FastAPI layer needs to discover Q&A content files. If it uses hardcoded file paths or a fragile naming convention (e.g., `products.md`, `shipping.md`), any rename or reorganization of the vault by the content author breaks the bot at runtime with no warning.
-
-- Warning signs: `FileNotFoundError` after a vault edit session; bot serving stale content because files were renamed; content author unaware their changes affect the live bot.
-- Prevention: Use a discovery-based approach — scan the vault directory for `.md` files that contain a frontmatter `enabled: true` or a specific tag (e.g., `tags: [govi-bot]`). This decouples bot logic from specific filenames. Reload content on each request (with a short cache TTL, e.g., 30 seconds) rather than once at startup so vault edits take effect quickly.
-- Phase to address: Phase 3
-
-### Recursive Vault Scanning Hitting Non-Content Files
-
-Obsidian vaults contain system files: `.obsidian/` config directory, `.trash/`, attachment files (`.png`, `.pdf`, `.canvas`), and template files. A naive `glob('**/*.md')` will include template files and deleted-but-not-purged files in `.trash/`.
-
-- Warning signs: Template placeholder content appearing in menus; deleted Q&A entries still showing up; bot loading Obsidian template files as menu items.
-- Prevention: Exclude `.obsidian/`, `.trash/`, and any configurable excluded directories when scanning. Use frontmatter-based inclusion (only load files with `enabled: true`) rather than loading all `.md` files and filtering by content.
-- Phase to address: Phase 3
-
-### No Cache — Vault Read on Every Request
-
-Reading and parsing all vault markdown files on every incoming message request adds latency proportional to vault size and is unnecessary for content that changes infrequently.
-
-- Warning signs: Response times increasing as vault grows; disk I/O visible in profiling on every request; FastAPI process with high I/O wait.
-- Prevention: Implement a simple in-memory content cache with a configurable TTL (30–60 seconds default). On cache miss, reload from disk. This gives near-real-time content updates without per-request disk reads. Do not implement file-watch-based invalidation in v1 — TTL is simpler and sufficient.
-- Phase to address: Phase 3
+**Phase to address:** Phase 1 of v1.2 (OAuth callback handler).
 
 ---
 
-## Deployment Pitfalls
+### Pitfall 3: Not Calling `/{page-id}/subscribed_apps` After OAuth — Bot Receives No Webhook Events for the New Page
 
-### ngrok URL Changing on Every Restart (Dev Workflow Breaks)
+**What goes wrong:** Storing the Page Access Token is not enough. For each new Page connected via OAuth, you must explicitly call `POST /{page-id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token={page_token}` to subscribe the Page to your Facebook App's webhook. Without this call, the webhook URL receives zero events for that Page even though the token is valid and the app-level webhook is configured.
 
-The free tier of ngrok generates a new random URL on each process restart. Facebook Messenger webhooks must be re-registered every time the URL changes via the Facebook developer console. This is a significant friction point during development — a forgotten re-registration means the bot stops receiving events with no error visible to the developer.
+**Why it happens:** The separation between "having a Page token" and "subscribing the Page to the app webhook" is non-obvious. App-level webhook configuration in the Facebook App Dashboard only registers the callback URL and verify token — it does not automatically subscribe all authorized Pages.
 
-- Warning signs: Bot not responding after an ngrok restart; no events appearing in webhook logs; developer making code changes but forgetting to update the webhook URL.
-- Prevention: Use ngrok's static domain feature (available on free tier as of 2023) or use a paid ngrok account. Alternatively, use `cloudflared tunnel` (Cloudflare's free tunnel service) which supports stable URLs on free tier. Document the re-registration procedure in the project README. Add a startup log line that prints the current expected webhook URL.
-- Phase to address: Phase 1 (dev environment setup)
+**Consequences:** The bot appears to work (token is valid, can call Graph API), but incoming Messenger messages never arrive. The issue is invisible until a customer sends a test message and gets no response.
 
-### SSL Required for Webhook — Self-Signed Certs Not Accepted
+**Prevention:**
+- After successfully storing a Page Access Token, immediately call `POST /{page-id}/subscribed_apps` with `subscribed_fields=messages,messaging_postbacks` using the page token.
+- Log the subscription response and store `webhook_subscribed: true` in the DB per Page record.
+- Add a health-check that calls `GET /{page-id}/subscribed_apps` to verify the subscription is still active.
+- The required fields for a Messenger bot are: `messages`, `messaging_postbacks`. Add `messaging_optins` if opt-in flows are used.
 
-Facebook requires the webhook URL to use HTTPS with a certificate signed by a trusted CA. Self-signed certificates are explicitly rejected. This means the bot cannot be tested locally without a tunnel service (ngrok, cloudflared) or a publicly accessible server with a real certificate.
+**Detection:** Zero incoming webhook events after connecting a Page; `GET /{page-id}/subscribed_apps` returns empty data or does not include your app.
 
-- Warning signs: Webhook registration failing with certificate errors; attempts to use `localhost` as the webhook URL; self-signed cert tools being suggested for local dev.
-- Prevention: Use ngrok or cloudflared for local development — they provide valid TLS termination from their domain. For production, use a platform that provides managed TLS (Railway, Render, Fly.io). Document this constraint clearly so developers don't waste time with local cert setups.
-- Phase to address: Phase 1
-
-### PORT and Environment Variable Mismatch Between Services
-
-The Node.js bot defaults to port 3000; the FastAPI backend defaults to port 8000. The bot calls `GOVI_AI_URL ?? "http://localhost:8000"`. If `GOVI_AI_URL` is misconfigured in production, the bot silently falls back to `localhost:8000` — which works locally but fails in production (where the two services are on different hosts).
-
-- Warning signs: Bot working locally but not in production; `axios` calls failing with connection refused; `GOVI_AI_URL` missing from production `.env`.
-- Prevention: Remove the fallback default for `GOVI_AI_URL` — make it a required environment variable that fails loudly at startup if not set. Same for `FACEBOOK_PAGE_ACCESS_TOKEN` and `FACEBOOK_VERIFY_TOKEN`. Add a startup validation step that checks all required env vars before binding the port.
-- Phase to address: Phase 1
-
-### Process Crashes Silently — No Restart Policy
-
-If the Node.js or FastAPI process crashes, there is no process manager to restart it. The bot stops working silently until someone manually restarts it.
-
-- Warning signs: Bot unresponsive with no recent logs; process no longer listed in `ps`; users reporting extended outages.
-- Prevention: Use `pm2` for the Node.js process and `uvicorn` with a supervisor for FastAPI in production. For the simplest v1 approach: `pm2 start npm -- start` and `pm2 start "uvicorn app.main:app"`. Document this in the deployment guide. For cloud platforms (Render, Railway), this is handled automatically.
-- Phase to address: Phase 5 (deployment); note the risk in Phase 1 docs
+**Phase to address:** Phase 1 of v1.2 (OAuth callback — subscription call must be atomic with token storage).
 
 ---
 
-## Security Pitfalls
+### Pitfall 4: Missing `entry.id` Routing — All Pages Share One Bot Instance But Only One Page Gets Handled Correctly
 
-### Vault Path Exposed in API Responses or Logs
+**What goes wrong:** The current bot uses a module-level constant `PAGE_ACCESS_TOKEN` loaded from env at startup. When multiple Pages send webhooks to the same endpoint, each event's `entry.id` identifies which Page it came from, but the bot uses the same token for all responses. Events from Page B are processed using Page A's token, which makes Graph API calls fail or return wrong data.
 
-The `VAULT_PATH` environment variable contains a local filesystem path (e.g., `/Users/username/Documents/Obsidian/Govi-Vault`). If this path leaks into error messages returned to the Messenger bot (and thus to users), it reveals the operator's filesystem structure.
+**Why it happens:** The single-page assumption is baked into every function (`sendMessage`, `fetchUserName`, `passThreadControl`, `sendTypingIndicator`, `setupMessengerProfile`). All of them hardcode `PAGE_ACCESS_TOKEN`. Refactoring to multi-page requires threading the correct token through every function call.
 
-- Warning signs: FastAPI exceptions propagating unhandled to the bot and being sent to the user; `traceback` output containing the vault path; Uvicorn's default exception handler returning stack traces in development mode running in production.
-- Prevention: Never return raw exception tracebacks to API callers. Use FastAPI's `exception_handler` to return generic error responses. In the bot, catch all FastAPI errors and send the user a generic fallback message. Set `ENVIRONMENT=production` to suppress debug output.
-- Phase to address: Phase 3 (vault integration); Phase 1 (general error handling)
+**Consequences:** Messages sent to Page B's users arrive appearing to come from Page A (or fail entirely). `fetchUserName` fetches from wrong page graph context. `setupMessengerProfile` called at startup (line 532 of `index.ts`) runs against whichever token was last loaded — overwriting all other pages' persistent menus.
 
-### No Rate Limiting on the FastAPI Content Endpoint
+**Prevention:**
+- Route on `entry.id` (the Page ID) at the top of the webhook POST handler: `const pageId = entry.id`.
+- Look up the Page record from DB using `pageId` to get the correct `pageToken`, `content`, and `config`.
+- Thread `pageToken` as a parameter through every downstream function (`sendMessage(recipientId, text, { pageToken })`) — do not use a global constant.
+- Eliminate the module-level `PAGE_ACCESS_TOKEN` constant entirely. Fail fast on startup only if no pages exist in the DB.
+- The `setupMessengerProfile` call on startup (line 532) must be removed from the startup path entirely — per-page profile setup should run on demand when a Page is connected via OAuth.
 
-The `/ai/chat` endpoint (and the future content endpoint) is directly accessible to anyone who knows the URL — not just the Node.js bot. Without authentication or rate limiting, it can be abused to exfiltrate vault content or exhaust server resources.
+**Detection:** Log the `entry.id` and token source on each webhook — verify they match.
 
-- Warning signs: Endpoint reachable from the internet without credentials; no `Authorization` header checked; no IP-based or token-based throttling.
-- Prevention: Add a shared secret between the Node.js bot and FastAPI — the bot sends an `X-Internal-Token` header, and FastAPI validates it. This is not security against a sophisticated attacker but prevents casual abuse. For v1, a single shared secret in `.env` is sufficient. Optionally add `slowapi` rate limiting on the content endpoint.
-- Phase to address: Phase 1 (before opening the system to real traffic)
+**Phase to address:** Phase 2 of v1.2 (multi-page bot refactor — the single largest structural change in this milestone).
 
-### Page Access Token Logged or Leaked
+---
 
-The `PAGE_ACCESS_TOKEN` is used in the `params` argument of axios calls to the Facebook Graph API. If axios logs requests (e.g., in debug mode), the token appears in query strings in logs. Similarly, if error objects from axios are logged in full, the token is in the URL.
+### Pitfall 5: Cross-Tenant Data Leak — Forgetting `tenant_id` Filter on One DB Query
 
-- Warning signs: Full axios request URLs appearing in logs; `access_token=EAA...` visible in log output; error objects logged with `console.error("Error:", err)` which dumps the full axios error including config.url.
-- Prevention: Never log the full axios error object. Log only `err.response?.data` and `err.message`. Move the access token from a query param to an `Authorization: Bearer` header (Facebook Graph API accepts both) — header-based tokens are less likely to appear in access logs and proxy logs.
-- Phase to address: Phase 1
+**What goes wrong:** With a multi-tenant SQLite schema, every query that reads per-tenant data (Pages, Q&A content, escalation settings, etc.) must include a `WHERE tenant_id = ?` clause using the value from the authenticated JWT, not from a client-supplied parameter. If even one endpoint omits this filter — a common mistake when adding endpoints under time pressure — Tenant A can read Tenant B's page configuration, Q&A content, or Page Access Tokens.
 
-### CORSMiddleware Allows All Origins (main.py)
+**Why it happens:** SQL queries are written manually; there is no automatic filter enforcement like PostgreSQL RLS or an ORM scope. The responsibility falls on each developer writing each query. Background jobs, list endpoints added after MVP, and admin "view all" endpoints are the most common places this filter is forgotten.
 
-The FastAPI backend has `allow_origins=["*"]` — it accepts requests from any origin. For an internal API that should only be called by the Node.js bot, this is unnecessarily permissive. While CORS headers don't protect server-to-server calls, it signals that the API was set up without security scope in mind.
+**Consequences:** Information disclosure: page tokens, Q&A content, client email addresses, escalation PSIDs. If page tokens are exposed, a bad actor can send messages from a client's Page. This is a security incident requiring client notification.
 
-- Warning signs: `allow_origins=["*"]` in `main.py` for an API that has no browser clients.
-- Prevention: Since the FastAPI API is called server-to-server (Node.js → FastAPI), CORS is irrelevant — CORS headers are only enforced by browsers. However, the permissive setting is a signal to tighten to the internal-token approach described above. Lock `allow_origins` to the bot's domain once deployed.
-- Phase to address: Phase 1 (low priority, note the issue)
+**Prevention:**
+- Never trust `tenant_id` from the request body or URL parameters. Always extract it from the verified JWT payload server-side.
+- Use a query-builder wrapper or repository layer that automatically appends `tenant_id` — do not scatter raw SQL with `WHERE tenant_id = ?` throughout request handlers.
+- Write a test for every API endpoint that: (a) authenticates as Tenant A, (b) attempts to read a resource belonging to Tenant B using a known ID, and (c) asserts a 404 or 403.
+- Super-admin endpoints that intentionally bypass tenant scoping must be clearly marked and require a separate `super_admin` role claim in the JWT — not just checking `isAdmin`.
+
+**Detection:** Automated IDOR tests per endpoint; code review checklist item: "Does this query filter by tenant_id from JWT?"
+
+**Phase to address:** Phase 1 of v1.2 (DB schema design — tenant_id enforcement must be a first-class constraint from the start, not retrofitted).
+
+---
+
+## Moderate Pitfalls
+
+---
+
+### Pitfall 6: Facebook App Review Gate Blocks Production Launch for `pages_messaging`
+
+**What goes wrong:** The `pages_messaging` permission is an advanced permission requiring Meta App Review before it can be used by users outside your app's development team. In Development Mode, only app admins, developers, and test users can use the bot. Once you build the admin panel and start onboarding real clients (who are not in your Facebook App's developer console), they hit a permissions wall — they can grant OAuth access but messages won't go through.
+
+**Why it happens:** Building the admin panel and OAuth flow is straightforward to test internally (where the developer IS an app admin). The App Review blocker only surfaces when you try to add real external clients.
+
+**Consequences:** The entire multi-tenant admin panel is built but cannot be used by real clients until App Review is approved (timeline: typically 5-7 business days if submission is clean; can be longer if rejected and resubmitted).
+
+**Prevention:**
+- Submit App Review for `pages_messaging` and `pages_manage_metadata` early — ideally before or in parallel with admin panel development, not after.
+- During development, add each test client as a Test User or Developer role in the Facebook App dashboard.
+- Prepare the App Review submission materials (demo video, test credentials, use-case description) as part of the phase that implements OAuth flow, not as a separate afterthought.
+- Review requirement: `pages_messaging` requires demonstrating valid customer service use case and compliance with Messenger policy.
+
+**Detection:** OAuth succeeds but message sends return `permissions error` or `application does not have permission` for external users.
+
+**Phase to address:** Phase 1 of v1.2 (flag as external dependency with lead time; do not wait until feature-complete to start review).
+
+---
+
+### Pitfall 7: OAuth `state` Parameter Missing — CSRF Vulnerability in Page Connection Flow
+
+**What goes wrong:** The Facebook OAuth flow redirects users to a callback URL with a `code` parameter. Without a cryptographically random `state` parameter that is verified on callback, a CSRF attack can cause a tenant to connect an attacker-controlled Facebook Page to their account instead of their own. The attacker initiates the OAuth flow, captures the authorization URL with their code, and tricks the victim into completing the callback.
+
+**Why it happens:** The `state` parameter is optional in the OAuth spec. Many quick-start implementations omit it. The attack surface is real but requires a targeted social engineering step, so it often goes unmitigated in internal tools.
+
+**Consequences:** An attacker can link their Page token to a legitimate tenant's account. The tenant's admin panel now manages the attacker's Page instead of their own.
+
+**Prevention:**
+- Generate `crypto.randomBytes(32).toString('hex')` as the state value.
+- Store it in the user's server-side session (not in a cookie accessible to JS) before redirecting to Facebook.
+- On callback, verify `req.query.state === session.oauthState` before processing the `code`.
+- Invalidate the state after use (one-time use).
+
+**Detection:** OAuth callback handler that processes `code` without checking `state`.
+
+**Phase to address:** Phase 1 of v1.2 (OAuth implementation).
+
+---
+
+### Pitfall 8: SQLite Concurrent Writers From Two Processes — "Database Is Locked" Errors
+
+**What goes wrong:** The architecture runs Node.js (bot + admin API) and Python FastAPI as separate processes sharing a single SQLite file. SQLite allows only one writer at a time. If the FastAPI content router and the Node.js admin API attempt to write simultaneously (e.g., a content save during a bot webhook that writes a cache timestamp), one writer gets `SQLITE_BUSY` ("database is locked") and the operation fails.
+
+**Why it happens:** SQLite is designed for embedded single-process use. Multi-process write contention on the same file is a known limitation. WAL mode helps (allows concurrent reads alongside one writer) but does not eliminate write contention between processes.
+
+**Consequences:** Admin panel content saves fail intermittently during high-traffic bot operation. The failure is non-deterministic and hard to reproduce in development (where traffic is low). In production, it causes lost admin edits with no user-facing error if the error is not surfaced.
+
+**Prevention:**
+- Enable WAL mode immediately on DB connection: `PRAGMA journal_mode = WAL`.
+- Set a `busy_timeout` on both connections: `PRAGMA busy_timeout = 5000` (5 seconds). This causes the writer to retry rather than failing instantly.
+- Designate a single writer process: route all DB writes through the Node.js process (admin API). FastAPI reads content from DB but does not write. This eliminates write contention.
+- If FastAPI must write (e.g., content reload triggers), use an HTTP endpoint on the Node.js side rather than direct DB write from Python.
+
+**Detection:** `SQLITE_BUSY` or `database is locked` errors in logs during load; intermittent admin save failures.
+
+**Phase to address:** Phase 1 of v1.2 (DB setup — pragmas must be set before any multi-process access).
+
+---
+
+### Pitfall 9: In-Memory `userNameCache` and `lastMessageCache` Are Not Page-Scoped
+
+**What goes wrong:** The current bot maintains `userNameCache` and `lastMessageCache` as `Map<string, string>` keyed by sender PSID. In a multi-page setup, the same PSID can belong to a user who has messaged different Pages — and more importantly, the caches now hold state for all pages mixed together with no page scoping. A restart clears all state across all pages simultaneously.
+
+**Why it happens:** The caches were designed for a single-page bot. Adding multi-page support without updating the cache key causes PSID collisions if the same user messages two different Pages (PSIDs are page-scoped in Facebook's model, but within one user's Facebook account, they could message two of your managed Pages with different PSIDs — the issue is correctness of the map structure, not collision).
+
+**Prevention:**
+- Key the caches by `${pageId}:${psid}` instead of just `psid`. This ensures per-page isolation.
+- Document explicitly that these caches are lost on restart — acceptable for this project.
+- Do not persist these caches to DB unless there is a specific product requirement (v1.1 explicitly chose in-memory as sufficient).
+
+**Detection:** After restart, all users are greeted with the generic welcome message rather than their name — expected and documented behavior.
+
+**Phase to address:** Phase 2 of v1.2 (multi-page bot refactor).
+
+---
+
+### Pitfall 10: `setupMessengerProfile` Called at Bot Startup — Overwrites All Pages' Persistent Menu
+
+**What goes wrong:** The current `setupMessengerProfile()` is called at Express startup (line 532 of `index.ts`) using the single `PAGE_ACCESS_TOKEN` env var. In a multi-page world with per-page menu configuration stored in DB, calling this function at startup would either: (a) fail because `PAGE_ACCESS_TOKEN` no longer exists, or (b) be called with the wrong token, overwriting a client's customized persistent menu with a hardcoded default.
+
+**Why it happens:** Startup-time profile setup was fine for a single-page bot. The design assumption breaks when the bot becomes config-driven.
+
+**Consequences:** A client's customized persistent menu labels (set via the admin panel) get silently overwritten by hardcoded defaults every time the bot process restarts.
+
+**Prevention:**
+- Remove `setupMessengerProfile()` from the startup path entirely.
+- Call it on demand: (1) when a new Page is connected via OAuth, and (2) when a tenant saves changes to their menu configuration in the admin panel.
+- The content editor save endpoint should trigger a `setupMessengerProfile` call using that Page's token and the new config values.
+
+**Detection:** Persistent menu labels reverting to defaults after bot restarts.
+
+**Phase to address:** Phase 2 of v1.2 (multi-page bot refactor) — remove from startup; Phase 3 (admin panel content editor) — trigger on save.
+
+---
+
+### Pitfall 11: Vault-to-DB Migration Breaks FastAPI Content Router Without a Transitional State
+
+**What goes wrong:** The existing FastAPI `content.py` router reads from the Obsidian vault (`_vault` global dict, loaded at startup, reloaded via `POST /content/reload`). When the bot switches to reading content from SQLite, there is a window during migration where either: (a) the FastAPI router still reads from vault but the DB is not yet populated, or (b) the bot is configured to hit DB routes that don't exist yet.
+
+**Why it happens:** The migration is treated as a big-bang switch rather than a parallel-run with a cutover. If the existing vault route goes down before the DB route is functional, the bot's `sendCategoryMenu` / `sendAnswer` calls start returning 500s.
+
+**Consequences:** During migration, customers receive "Something went wrong" error messages and fallback menus. Bot is degraded for the duration of the migration.
+
+**Prevention:**
+- Use expand-then-contract: (1) add new DB-backed content endpoints alongside existing vault endpoints, (2) populate the DB with all current vault content, (3) switch bot to call new endpoints, (4) only then deprecate vault endpoints.
+- Keep `POST /content/reload` functional until the vault router is officially removed — it's the existing hot-reload mechanism clients may depend on.
+- Write a one-time migration script that reads vault files and inserts them into the DB with the same IDs, so that `CATEGORY:`, `QUESTION:` payload IDs in existing Messenger conversations remain valid after cutover.
+
+**Detection:** Bot returning `sendApologyWithMenu` fallbacks during content fetch; FastAPI returning 404 or 500 on content endpoints.
+
+**Phase to address:** Phase 3 of v1.2 (content DB layer) — migration script required before vault retirement.
+
+---
+
+## Minor Pitfalls
+
+---
+
+### Pitfall 12: JWT Secret Shared Between Admin API and Bot Process — Over-broad Token Acceptance
+
+**What goes wrong:** If the admin panel JWT secret and the internal bot service authentication use the same secret (or the bot has no token validation at all), a token issued by the admin panel for a tenant user could theoretically be replayed against internal bot endpoints. More practically: if `jwtSecret` is hardcoded or predictable (e.g., `"secret"`, `"changeme"`), all JWT security is void.
+
+**Prevention:** Generate a random 256-bit JWT secret in `.env`. Do not share it in code or commit it to git. Validate JWT on every admin API request — not just on login.
+
+**Phase to address:** Phase 1 of v1.2 (auth setup).
+
+---
+
+### Pitfall 13: React Admin Panel Calling Backend With `tenant_id` in Request Body — Trusting the Client
+
+**What goes wrong:** A common shortcut is including `tenant_id` as a field in request bodies sent from the React frontend. The backend uses this field to scope data. A user with basic browser devtools can change their tenant_id and read another tenant's data.
+
+**Prevention:** Never accept `tenant_id` from the request body for scoping. Extract it exclusively from the verified JWT payload server-side. The frontend does not need to send it.
+
+**Phase to address:** Phase 2 of v1.2 (admin API implementation).
+
+---
+
+### Pitfall 14: React Dev Proxy Port Conflicts With Existing Services
+
+**What goes wrong:** The existing bot runs on port 3000 and FastAPI on port 8000. Vite's default dev server is also port 5173. If React's Vite proxy is misconfigured to target the wrong port for the admin API, API calls silently go to the wrong service (e.g., the Messenger bot's Express server), which returns 404s that are easy to misdiagnose as CORS issues.
+
+**Prevention:** Assign distinct ports: bot on 3000, FastAPI on 8000, admin API (if separate) on 3001 or serve admin API from the bot's Express server on a `/admin` prefix. Document all ports in `.env.example`. Vite proxy should explicitly target the admin API port, not the bot port.
+
+**Detection:** Admin API calls returning HTML or unexpected 404s; Express bot logs showing unexpected `/api/...` requests.
+
+**Phase to address:** Phase 2 of v1.2 (React admin panel setup).
+
+---
+
+### Pitfall 15: Escalation `ADMIN_PSID` Is Now Per-Page — Global Env Var Breaks for Multiple Clients
+
+**What goes wrong:** The current `handleEscalation` reads `process.env.ADMIN_PSID` as a single global value. In a multi-page setup, each client has their own admin PSID for their Page's inbox. Using a global env var means all escalations route to the original admin's Messenger, not the client's designated agent.
+
+**Prevention:** Store `admin_psid` per Page record in the DB alongside the Page Access Token and content config. The `handleEscalation` function must accept the page config as a parameter, not read from `process.env`.
+
+**Phase to address:** Phase 2 of v1.2 (multi-page bot refactor).
 
 ---
 
@@ -247,20 +283,33 @@ The FastAPI backend has `allow_origins=["*"]` — it accepts requests from any o
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Phase 1: Webhook hardening | Missing signature verification, swallowed Graph API errors, token in logs | Add HMAC verification, check `data.error`, log `err.message` only |
-| Phase 1: Env var validation | Silent fallback to localhost defaults masking production misconfiguration | Make all service URLs required env vars with startup validation |
-| Phase 2: Menu state design | Session state in memory lost on restart; postback payload bloat | Document in-memory Map limitation; use flat opaque payload IDs |
-| Phase 2: Event dispatch | Text and postback events conflated in single handler | Split dispatcher: postback → postback handler, text → fallback handler |
-| Phase 3: Vault parser | Wikilinks, frontmatter, BOM, recursive scan hitting system files | Use `python-frontmatter`, `utf-8-sig`, exclude `.obsidian/` and `.trash/` |
-| Phase 3: Vault discovery | Hardcoded filenames breaking on vault rename/reorganize | Frontmatter-based inclusion (`enabled: true`), short-TTL cache |
-| Phase 4: Human escalation | 24-hour messaging window policy; silent Graph API errors | Use message tags for out-of-window messages; validate API response body |
-| Phase 5: Deployment | ngrok URL churn, no process manager, SSL cert requirements | Use static ngrok domain; pm2 for process management; document SSL constraint |
+| OAuth flow implementation | Short-lived token stored; `state` CSRF skipped; `subscribed_apps` call missing | 3-step exchange; crypto state in session; subscription call atomic with token store |
+| Token storage schema | No token health-check; no invalidation status | Store `token_status`, `token_granted_by_user_id`, `webhook_subscribed` columns; hourly health-check job |
+| App Review gating | External clients blocked until `pages_messaging` approved | Submit App Review in parallel with development; add test clients as Developer roles immediately |
+| Multi-page webhook routing | `PAGE_ACCESS_TOKEN` global constant used for all pages | Route on `entry.id`; thread `pageToken` through all functions; remove startup `setupMessengerProfile` |
+| Multi-page state caches | `userNameCache`/`lastMessageCache` not page-scoped | Key as `${pageId}:${psid}` |
+| DB multi-tenant design | Missing `WHERE tenant_id = ?` on any single endpoint | Repository layer enforcing tenant scope; IDOR test per endpoint |
+| SQLite multi-process access | Write contention causing `SQLITE_BUSY` | WAL mode + `busy_timeout = 5000`; single-writer process rule |
+| Vault-to-DB content migration | Bot goes dark during migration window | Expand-then-contract; migration script preserving IDs; parallel endpoints before cutover |
+| Per-page persistent menu setup | `setupMessengerProfile` at startup overwrites DB-configured menus | Remove from startup; call on OAuth connect and on admin content save |
+| Admin panel client data isolation | `tenant_id` trusted from request body | JWT-only tenant scoping; frontend never sends tenant_id |
+| Escalation settings per page | Global `ADMIN_PSID` env var routes all escalations to single inbox | Per-page `admin_psid` in DB; passed as config parameter to `handleEscalation` |
+| JWT security | Weak secret; tokens not validated on every request | Random 256-bit secret; middleware validates on all admin routes |
 
 ---
 
 ## Sources
 
-- Existing codebase: `messenger-bot/src/index.ts`, `app/main.py`, `app/routers/ai.py`, `app/config.py` (HIGH confidence — direct code inspection)
-- Facebook Messenger Platform documentation: webhook verification, message limits, policy constraints (HIGH confidence — well-established platform constraints, stable across versions)
-- Obsidian file format behavior: frontmatter, wikilinks, vault structure (HIGH confidence — deterministic filesystem behavior)
-- Python file I/O: BOM handling, encoding behavior (HIGH confidence — standard library behavior)
+- Existing codebase: `messenger-bot/src/index.ts` (direct code inspection — HIGH confidence)
+- Meta Developers: Access Tokens Guide — https://developers.facebook.com/docs/facebook-login/guides/access-tokens/ (HIGH confidence)
+- Meta Developers: Long-Lived Token Exchange — https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived/ (HIGH confidence)
+- Meta Developers: Webhooks for Pages / `subscribed_apps` endpoint — https://developers.facebook.com/docs/graph-api/webhooks/getting-started/webhooks-for-pages/ (HIGH confidence)
+- Meta Developers: Messenger Profile API (per-page operation confirmed) — https://developers.facebook.com/docs/messenger-platform/reference/messenger-profile-api/ (HIGH confidence)
+- Meta Developers: Facebook Login Manual Flow / state parameter — https://developers.facebook.com/documentation/facebook-login/guides/advanced/manual-flow (HIGH confidence)
+- Multi-tenant SaaS data isolation patterns — https://medium.com/@instatunnel/multi-tenant-leakage-when-row-level-security-fails-in-saas-da25f40c788c (MEDIUM confidence)
+- Multi-tenant React SPA patterns — https://marmelab.com/blog/2022/12/14/multitenant-spa.html (MEDIUM confidence)
+- better-sqlite3 WAL mode and concurrency — https://deepwiki.com/WiseLibs/better-sqlite3/3.4-wal-mode-and-performance-tuning (HIGH confidence — official library documentation)
+- SQLite concurrent writes — https://tenthousandmeters.com/blog/sqlite-concurrent-writes-and-database-is-locked-errors/ (HIGH confidence)
+- OWASP Multi-Tenant Security Cheat Sheet — https://cheatsheetseries.owasp.org/cheatsheets/Multi_Tenant_Security_Cheat_Sheet.html (HIGH confidence)
+- Auth0: OAuth State Parameter — https://auth0.com/docs/secure/attack-protection/state-parameters (HIGH confidence)
+- Facebook community thread on token community invalidation — https://developers.facebook.com/community/threads/587797631846246/ (MEDIUM confidence)

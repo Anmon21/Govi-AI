@@ -1,230 +1,359 @@
-# Features Research
+# Feature Landscape
 
-**Domain:** Rule-based Facebook Messenger customer support bot (e-commerce/retail)
-**Project:** Govi AI
-**Researched:** 2026-05-14
-**Confidence:** HIGH (Messenger platform constraints are well-documented; e-commerce support patterns are stable)
+**Domain:** Multi-tenant Facebook Messenger bot admin panel (v1.2)
+**Project:** Govi AI — Admin Panel & Multi-Page Support
+**Researched:** 2026-05-27
+**Confidence:** HIGH for UX/auth patterns (stable domain); MEDIUM for Facebook OAuth specifics (Meta docs are accurate but app review timelines are unpredictable)
+
+---
+
+## Context: What Already Exists
+
+v1.0/v1.1 shipped a working single-page Messenger bot. v1.2 adds an admin panel web app on top of the existing FastAPI backend. The features below describe only what is **new** in v1.2. The bot behaviors (menus, Q&A, escalation, greetings, typing indicators) are already built and are table stakes for the bot layer, not for this milestone.
+
+**Dependency boundary:** All new admin panel features depend on the bot's existing webhook handler being refactored to be page-aware (reads page_id from the incoming event and looks up config + token per page from DB). That refactor is a prerequisite for all content editing features to have effect.
 
 ---
 
 ## Table Stakes
 
-These are the features that, if missing, cause the bot to feel broken or unresponsive. Users who hit a dead end will abandon the conversation and not return.
+Features users (super-admin and tenant clients) expect. Missing any of these makes the admin panel feel incomplete or untrustworthy.
 
 ---
 
-### Greeting / Welcome Message
+### 1. Super-Admin: Create and Manage Client Accounts
 
-- **Description:** When a user first messages the Messenger page (or sends a "Get Started" event), the bot responds with a welcome message that sets expectations — what the bot can do and how to navigate it. Facebook sends a `messaging_postbacks` event with payload `GET_STARTED` when the user taps the Get Started button in a fresh conversation.
-- **Complexity:** Low
-- **Dependencies:** Webhook event handling, postback routing
-- **Expected user behavior:** User opens the page and taps "Get Started" or sends a first message. If there is no welcome message, the conversation starts with silence — users immediately assume the bot is broken.
-- **Platform note:** The Get Started button must be registered via the Messenger Profile API before it appears. This is a one-time setup step, not a per-message handler.
+**What:** A super-admin UI where the platform operator (Govi team) creates client accounts by entering email + initial password. Clients receive a credential set and can log in. The super-admin sees all clients, can deactivate accounts, and cannot accidentally see one client's data when navigating.
 
----
+**Why expected:** This is the entry point to the entire system. Without it, adding new clients requires direct DB manipulation. Every multi-tenant SaaS has this.
 
-### Persistent Menu (Main Menu)
+**Complexity:** Low. Standard CRUD (create account, list accounts, deactivate). No invitation email required in v1 — super-admin hands credentials to the client directly.
 
-- **Description:** A hamburger-style menu anchored to the bottom of the Messenger chat window, always visible, containing top-level navigation items (e.g., "Product Questions", "Contact Support"). Configured via the Messenger Profile API. Users can return to a known state at any time without typing anything.
-- **Complexity:** Low (setup) / Medium (keeping in sync with content changes)
-- **Dependencies:** Messenger Profile API access (Page access token), postback routing
-- **Expected user behavior:** Users who get lost mid-conversation tap the persistent menu rather than typing. Without it, users who reach a dead end have no recovery path — they either retype from scratch or leave.
-- **Platform note:** Limited to 3 top-level items, each supporting nested menus (up to 5 items per level). Items are postbacks or URLs — not free text. Changes require a Profile API call (not automatic).
+**Dependencies:** JWT-based auth (see auth flow below), tenant_id column on all data models, RBAC with two roles: `super_admin` and `client`.
+
+**Notes:**
+- Two roles only: `super_admin` (one or a handful of operators) and `client` (each tenant).
+- `super_admin` role must be hardcoded or seeded — not self-created through the UI.
+- Tenant isolation enforcement: every API query must filter by `tenant_id` extracted from the JWT. A missing filter is a data leak. This is the most important security invariant in the system.
 
 ---
 
-### Quick Reply Buttons (Menu Navigation)
+### 2. Client Login and Session
 
-- **Description:** After each bot message, present a set of quick-reply chips that represent the valid next steps. Users tap rather than type. This is the primary navigation mechanism for rule-based bots — it removes the need for NLP entirely.
-- **Complexity:** Low
-- **Dependencies:** Menu state machine, message send API
-- **Expected user behavior:** Users expect tappable options. If the bot sends a plain text question ("What do you need help with?") with no buttons, most users will not know what to type and will either try random words or abandon.
-- **Platform note:** Messenger quick replies disappear after the user taps one. Maximum 13 quick replies per message, max 20 characters per label. Plan menu structure around this constraint.
+**What:** Clients log in with email + password via a standard login form. On success, they receive a JWT. The session shows only their own Pages and content — they have no visibility into other tenants' data.
 
----
+**Why expected:** Basic auth. If clients can see each other's data, the product is broken.
 
-### Product Q&A Flow (Content-Driven Answers)
+**Complexity:** Low. Email/password + JWT. No SSO, no magic links, no MFA needed in v1.
 
-- **Description:** A structured navigation tree that leads users to product-specific answers sourced from the Obsidian vault. Flow: user selects a product category → selects a specific question → receives the answer from the vault markdown file. The Node.js bot calls the FastAPI backend to retrieve the answer for a given question key; FastAPI reads the markdown file and returns the content.
-- **Complexity:** Medium
-- **Dependencies:** Persistent menu, quick reply buttons, Obsidian vault reader (FastAPI), menu state machine
-- **Expected user behavior:** Users arrive with a specific question ("Does this product contain X?"). If the answer isn't findable within 3 taps, they escalate to a human or leave. Keep the tree shallow: category → question → answer, maximum 3 levels.
-- **Content dependency:** The FastAPI backend must be able to map a question key (e.g., `skincare/ingredients`) to a vault file and return the answer text. This coupling between menu structure and vault file layout must be designed deliberately upfront.
+**Dependencies:** Password hashing (bcrypt), JWT issuance with `tenant_id` and `role` claims, middleware that validates the token and injects tenant context on every request.
+
+**Notes:**
+- Store `tenant_id` in the JWT payload so the server never has to look it up separately.
+- JWTs should expire in 24h with no refresh token in v1 (simplest path). A forced re-login every day is acceptable for an internal admin tool.
+- Super-admin and client login can share the same login page — role determines what they see after.
 
 ---
 
-### Human Escalation Flow
+### 3. Facebook Page Connection via OAuth ("Connect with Facebook")
 
-- **Description:** When a user selects "Talk to a person" (or the bot cannot resolve their issue), the bot notifies the admin via the Messenger page inbox and informs the user that a human will respond. The admin receives a Messenger notification in the Page inbox (not a separate tool — the admin is already managing the Page).
-- **Complexity:** Medium
-- **Dependencies:** Quick reply buttons, Facebook Page messaging permissions, admin Page inbox setup
-- **Expected user behavior:** Users who are frustrated or have a question not covered by the menu expect a clear path to a human. If the escalation entry point is buried or absent, they leave negative reviews or contact via other channels.
-- **Implementation note:** Messenger's "human takeover" protocol (`pass_thread_control`) is the correct mechanism when using the Handover Protocol — the bot passes thread control to the Page inbox app so the admin can reply directly. This requires the Page inbox to be configured as the secondary receiver. Without this, the bot and the admin can conflict (both trying to respond to the same thread).
-- **Admin experience:** The admin sees the escalated conversation in the standard Facebook Page inbox and replies there. No extra tooling needed.
+**What:** A client clicks "Connect with Facebook" on their dashboard. This triggers the Facebook OAuth login dialog, the user grants permissions, and the app exchanges the auth code for a user access token, then calls `GET /me/accounts` to list Pages the user manages. The client selects which Page to connect. The app exchanges the user token for a long-lived Page access token and stores it in the DB against the tenant and page_id.
+
+**Why expected:** This is the core mechanism for connecting the bot to a client's Page. Manual token entry would be error-prone and fragile. Every Messenger bot SaaS platform (Chatfuel, ManyChat, Botpress) uses this exact flow.
+
+**Complexity:** High. Multiple OAuth steps, error states (user denies, page not listed, token exchange fails), token storage, and the Facebook App Review requirement (see Pitfalls).
+
+**Required Facebook permissions for the OAuth scope:**
+- `pages_messaging` — send/receive messages on behalf of the Page
+- `pages_manage_metadata` — subscribe to webhook events, update Page settings
+- `pages_show_list` — enumerate Pages the user manages (required by `pages_messaging`)
+
+**Token storage:** Store the long-lived Page access token (not the user access token) in the DB. Long-lived Page access tokens do not expire if the user keeps the app connected. Short-lived tokens (~1-2h) are not suitable for a bot.
+
+**Token exchange flow:**
+1. Redirect to `https://www.facebook.com/v25.0/dialog/oauth` with `scope=pages_messaging,pages_manage_metadata,pages_show_list`
+2. On callback, exchange code for short-lived user token via `GET /oauth/access_token`
+3. Exchange short-lived user token for long-lived user token via `GET /oauth/access_token?grant_type=fb_exchange_token`
+4. Call `GET /me/accounts` with long-lived user token to list Pages + their Page access tokens
+5. Store the Page access token from step 4 (these are long-lived by default when derived from a long-lived user token)
+
+**Dependencies:** Facebook App (registered with Meta), OAuth callback endpoint in FastAPI, DB table for `pages` (page_id, tenant_id, page_name, page_access_token, connected_at).
+
+**Notes:**
+- The `state` parameter in the OAuth redirect must be verified on callback to prevent CSRF.
+- App Review is required before non-admin Facebook users can grant these permissions. During development, only users with Developer/Tester/Admin role on the Facebook App can connect Pages. This is fine for internal use.
+- One client may have multiple Pages. The UI should allow selecting one Page per connection attempt, not bulk-connecting all Pages at once.
 
 ---
 
-### "I Don't Understand" / Fallback Handler
+### 4. Connected Pages Dashboard
 
-- **Description:** When the bot receives a free-text message it cannot parse (which is most free-text in a rule-based system), it responds with a helpful fallback: "I didn't get that. Here's what I can help with:" followed by the main menu options. It does not silently fail or return nothing.
-- **Complexity:** Low
-- **Dependencies:** Quick reply buttons, main menu
-- **Expected user behavior:** Some users will always type instead of tapping. Without a fallback handler, free-text input produces silence — users think the bot is down. The fallback re-anchors them to the menu.
-- **Important:** The fallback must NOT say "I don't understand" and leave the user stranded. It must immediately offer a recovery path.
+**What:** After connecting a Page, clients see a list of their connected Pages on the dashboard. Each Page shows: Page name, connection status (connected/disconnected), and a link to edit its configuration.
+
+**Why expected:** Clients need to see what they've connected. Without this, there's no way to know if OAuth succeeded or which Pages are active.
+
+**Complexity:** Low. A list view with status indicators.
+
+**Dependencies:** Page connection flow (above), `pages` table.
+
+**Notes:**
+- Show a clear call-to-action ("Connect a Facebook Page") when no Pages are connected yet. Empty states with a dead-empty list are confusing.
+- "Disconnected" state should appear when the stored token has been revoked (detectable via a failed Graph API call). Don't silently swallow token errors — surface them as a "reconnect" prompt.
 
 ---
 
-### Graceful Session Restart
+### 5. Per-Page Welcome Text Editor
 
-- **Description:** If a user returns to a conversation after a long gap (hours/days), the bot does not continue from mid-flow state that is now stale. It detects a fresh message on a stale session and re-presents the main menu rather than trying to continue a broken flow.
-- **Complexity:** Low (if session state is stored with a TTL) / Medium (if state is stateless and rebuilt from context)
-- **Dependencies:** Session state management, main menu
-- **Expected user behavior:** Users who return after days expect to start fresh. If the bot responds with a continuation of a previous menu step ("Please select from the options above" — with no options visible), the experience is confusing.
+**What:** A text field where the client edits the greeting message their bot sends when a user taps "Get Started." Changes are saved to the DB and the bot reads them by page_id on each welcome event.
+
+**Why expected:** Welcome text is the first thing Messenger users see. Every bot admin tool exposes this as an editable field. Without it, all Pages run with the same hardcoded greeting.
+
+**Complexity:** Low. Single text field, save to DB.
+
+**Dependencies:** Per-page config table in DB, bot refactored to read welcome text from DB by page_id.
+
+**Notes:**
+- Character limit: Messenger welcome messages support up to 2000 characters. Enforce this in the UI with a counter.
+- No markdown rendering needed — Messenger renders plain text only.
+
+---
+
+### 6. Per-Page Menu Structure Editor
+
+**What:** A UI where the client edits menu labels and structure (top-level items, sub-items). Changes save to DB and the bot uses the stored structure to build quick reply flows.
+
+**Why expected:** Menu labels are the navigation backbone of the bot. Every client will have different product categories. Without this editor, all Pages have the same menu labels regardless of business.
+
+**Complexity:** Medium. The menu is a tree (up to 2 levels deep, constrained by Messenger limits). The UI must enforce: max 13 quick replies per level, max 20 characters per label, max 3 top-level persistent menu items.
+
+**Dependencies:** Per-page menu config table in DB, bot refactored to build quick replies from DB config by page_id.
+
+**Notes:**
+- The persistent menu (hamburger menu) and the quick-reply menus served in-conversation are separate concepts. The editor should clearly distinguish them.
+- Platform constraints are not negotiable — build them into the form validation (character counter, item count cap).
+- Do not build a drag-and-drop visual flow builder in v1. A structured form with add/remove/edit fields is sufficient.
+
+---
+
+### 7. Per-Page Q&A Content Editor
+
+**What:** A CRUD interface for managing Q&A content per Page. Clients can: create categories, add questions to categories, write answers, edit or delete existing entries. The bot reads this content from the DB (replacing the Obsidian vault) when serving answers.
+
+**Why expected:** This is the primary content management function — the reason the admin panel exists. Without it, content updates require Obsidian vault access or code changes.
+
+**Complexity:** Medium. Standard CRUD with a two-level hierarchy (category → questions). No rich text needed — plain text answers.
+
+**Dependencies:** `qa_categories` and `qa_items` tables scoped to `page_id`, bot refactored to fetch answers from DB instead of vault.
+
+**Notes:**
+- Answer length limit: enforce ~2000 characters (Messenger max). Show a counter.
+- Do not build answer versioning or draft/publish in v1. Save = live. Clients can always overwrite.
+- Do not build import-from-vault in v1. Manual entry is fine for the initial client count.
+- Category ordering matters for menu navigation — support manual reordering (up/down arrows, not drag-and-drop) in v1.
+
+---
+
+### 8. Per-Page Escalation Settings Editor
+
+**What:** A form where the client sets: the admin PSID (the Facebook User ID of the person who receives escalation notifications), and the handoff message the bot sends to the user when escalating.
+
+**Why expected:** Escalation is a v1.0 feature. The PSID and message were previously hardcoded in `.env`. Different Pages must have different escalation targets. Without this, all Pages escalate to the same person.
+
+**Complexity:** Low. Two fields: PSID (string), handoff message (text).
+
+**Dependencies:** Per-page config table in DB, bot reads escalation config from DB by page_id.
+
+**Notes:**
+- PSID validation is not easy (it's a large integer). Do not attempt to validate it via the API in v1 — document that the client must get it by having the admin send a message to the Page first.
+- Warn clearly in the UI: "If this is wrong, escalations will silently fail."
+
+---
+
+### 9. DB-Backed Bot Config (Replaces Obsidian Vault)
+
+**What:** The FastAPI backend reads bot configuration (welcome text, menu structure, Q&A, escalation settings) from the database by `page_id` on each request, instead of from Obsidian vault files.
+
+**Why expected:** This is the architectural prerequisite for everything else in v1.2. Without it, the admin panel has nowhere to save its data and the bot cannot use it.
+
+**Complexity:** Medium. DB schema design, migration from vault-based reads to DB reads in the FastAPI content router. The bot's `GOVI_AI_URL` calls change from vault endpoints to DB-backed endpoints.
+
+**Dependencies:** Database (PostgreSQL or SQLite), ORM or raw queries, DB migrations.
+
+**Notes:**
+- The vault reader in `app/routers/content.py` is replaced entirely. The existing API contract (endpoint paths, response shape) should be maintained where possible to minimize bot changes.
+- The `/content/reload` endpoint goes away — DB-backed content is always live.
+
+---
+
+### 10. Multi-Page Webhook Routing
+
+**What:** The Node.js bot receives webhook events that include a `page_id` in each entry. It looks up the correct Page access token and config from the DB (via the FastAPI backend) using that `page_id`, then handles the event with the correct credentials and content.
+
+**Why expected:** Without this, the bot can only serve one Page. It currently uses a single hardcoded `PAGE_ACCESS_TOKEN` from `.env`.
+
+**Complexity:** Medium. The bot's webhook handler already loops over `entry` events — it needs to extract `entry.id` (the page_id) and route each event through a page-aware lookup.
+
+**Dependencies:** DB-backed config (above), FastAPI endpoint to look up page token by page_id, bot refactor to remove hardcoded `PAGE_ACCESS_TOKEN`.
+
+**Notes:**
+- Token lookup should be cached in-process (a simple Map keyed by page_id) with a short TTL (e.g., 5 minutes) to avoid a DB call per message.
+- If the page_id is not found (deleted or disconnected), drop the event and log it — do not throw.
+- The webhook subscription must include the new page's `page_id` when a client connects a Page via OAuth. This means the FastAPI OAuth callback must also call the Graph API to subscribe the app to the new page's webhook fields.
 
 ---
 
 ## Differentiators
 
-These features add value over a basic bot but are not expected by default. They provide measurable improvement to support quality without being required for the bot to function.
+Features that are not expected by default but add meaningful value and differentiate this from a manually managed system.
 
 ---
 
-### Typing Indicator Between Messages
+### Token Health Monitoring
 
-- **Description:** Send a typing indicator (`sender_actions: typing_on`) before each bot response, especially before longer answers. Adds 0.5–1 second of perceived "thinking time" before the message appears.
-- **Complexity:** Low (one extra API call per message)
-- **Dependencies:** Message send API
-- **User impact:** Makes the bot feel less robotic. Users accustomed to chat expect a brief typing indicator before a response. Without it, messages can feel like instant form-letter output.
+**What:** A status indicator on the Connected Pages dashboard showing whether the stored Page access token is still valid. Validated by making a lightweight Graph API call (e.g., `GET /me?fields=id,name`) on page load.
 
----
+**Why valuable:** Page access tokens can be revoked by the user at any time via Facebook's App Settings. Without this, the bot silently fails to send messages and the client has no idea. A status badge (green/red) with a "Reconnect" button surfaces this immediately.
 
-### "Was this helpful?" Confirmation After Answers
-
-- **Description:** After delivering a product Q&A answer, present two quick replies: "Yes, thanks" and "No, I need more help." If the user selects "No," route them to the escalation flow or back to the menu.
-- **Complexity:** Low
-- **Dependencies:** Quick reply buttons, escalation flow
-- **User impact:** Captures a lightweight satisfaction signal. More importantly, it provides a graceful exit from an answer — without it, users who got an answer don't know what to do next and the conversation dies awkwardly.
+**Complexity:** Low. One API call per page load, cached for a few minutes.
 
 ---
 
-### Answer Length Truncation with "Read More"
+### Content Change Preview (Simulated Conversation)
 
-- **Description:** If a product Q&A answer from the vault is longer than ~600 characters, truncate it in the Messenger message and append a "Read more" quick reply that sends the full answer in a follow-up message (or links to an external page).
-- **Complexity:** Low
-- **Dependencies:** Product Q&A flow, FastAPI answer endpoint
-- **User impact:** Messenger messages over ~600 characters render poorly on mobile — the message card becomes very tall and users scroll past it. Truncation with continuation keeps the conversation readable.
-- **Note:** This is a content formatting concern, not a UX flow concern. The FastAPI layer should handle truncation logic so the bot layer stays simple.
+**What:** A read-only preview panel in the content editor that shows what the bot will say given the current saved config — a simplified simulation of the conversation flow for the current Page.
 
----
+**Why valuable:** Clients editing menu labels and Q&A answers cannot easily tell how the changes will look in Messenger until they open Messenger and test. A preview reduces error and increases confidence.
 
-### Escalation Context Forwarding
+**Complexity:** Medium. Not a live Messenger simulation — just rendering the menu tree and answer text in a chat bubble layout using the saved DB config.
 
-- **Description:** When a user escalates to a human, include a summary of what the user was asking about in the escalation notification (e.g., "User was asking about: Skincare / Ingredients"). The admin sees context without having to scroll back through the conversation.
-- **Complexity:** Low (if session state tracks the navigation path)
-- **Dependencies:** Session state, escalation flow
-- **User impact:** Reduces admin response time. Without context, the admin has to read back through the conversation to understand the issue before responding.
+**Not:** A live Messenger test (that requires actually messaging the Page). This is a static rendering only.
 
 ---
 
-### Obsidian Vault Hot-Reload (No Restart Required)
+### Audit Log for Content Changes
 
-- **Description:** The FastAPI backend reads vault files on each request rather than caching them at startup. Content updates in Obsidian are reflected immediately without restarting the service.
-- **Complexity:** Low (read file per request rather than at startup)
-- **Dependencies:** Obsidian vault reader
-- **User impact:** Enables the Govi team to update product Q&A content in Obsidian and have it live instantly. If the vault is cached at startup, a service restart is required for every content change — which defeats the purpose of Obsidian as the CMS.
-- **Trade-off:** Slightly higher I/O per request. For the expected request volume of a single-brand support bot, this is negligible.
+**What:** A simple log of who changed what and when, per Page. Shown as a chronological list: "Admin changed welcome text on 2026-05-27."
 
----
+**Why valuable:** When bot behavior changes unexpectedly, the client needs to know if a content change caused it. Without a log, debugging is guesswork.
 
-## Anti-Features (Don't Build in v1)
-
-These are features that seem useful but would add disproportionate complexity, scope risk, or maintenance burden at this stage. Each has a "instead" note for how to handle the underlying need without building the feature.
+**Complexity:** Low-Medium. An `audit_log` table with (tenant_id, page_id, user_id, action, timestamp, before_value, after_value). Write a log entry on every save. Display it in a settings page.
 
 ---
 
-- **Free-text NLP / intent detection:** Parsing user-typed messages to detect intent requires an ML model or LLM, which is explicitly out of scope. The fallback handler covers this: unrecognized input → re-present the menu. Do not add any keyword matching or regex-based intent logic — it creates maintenance burden and fails unpredictably. Instead: tight menu design eliminates the need for NLP.
+### Bulk Q&A Import from CSV
 
-- **Order tracking / order status lookup:** No store backend is connected. Even a stub would mislead users into expecting functionality that does not exist. Instead: include "Order questions" as an escalation path to a human.
+**What:** An upload endpoint that accepts a CSV file (columns: category, question, answer) and bulk-inserts Q&A items for a Page, replacing or merging with existing content.
 
-- **Multi-language support:** Requires either duplicate vault content in each language or a translation layer. English-only for v1. Instead: single vault in English, escalate non-English users to a human.
+**Why valuable:** Initial content setup via the CRUD form is tedious if a client has 50+ Q&A items. A CSV import reduces onboarding time from hours to minutes.
 
-- **Custom admin web UI:** Obsidian is the content management interface. Building a separate web UI duplicates the CMS problem Obsidian already solves. Instead: document the Obsidian vault file format clearly so content authors can work without developer help.
+**Complexity:** Medium. CSV parsing, validation (max length per field, deduplication), preview before confirming import.
 
-- **Proactive / outbound messaging:** Sending messages to users without them initiating contact requires the `pages_messaging` permission with approved use case, 24-hour messaging window enforcement, and message tag compliance. Complex regulatory overhead. Instead: respond-only (user initiates all conversations).
-
-- **Conversation history persistence across sessions for users:** Storing per-user conversation history in a database to provide continuity across sessions adds a DB dependency, PII concerns (Messenger PSID is a user identifier), and session management complexity. The bot's stateless menu model does not require history. Instead: always greet returning users with the main menu — it is the correct starting state for a rule-based bot.
-
-- **Rich media cards / carousels for product browsing:** Messenger generic templates (carousels) look good in demos but require structured product data (images, prices, URLs) that does not exist in the Obsidian vault. Instead: text-based answers from the vault, with an optional URL link if the vault content includes one.
-
-- **Sentiment detection / escalation triggers:** Detecting frustration in free text and auto-escalating requires NLP. Out of scope. Instead: explicit "Talk to a person" option always visible in the persistent menu.
-
-- **Analytics dashboard:** A dashboard for tracking conversation metrics (most asked questions, escalation rate) requires a separate data pipeline and storage. Instead: Facebook Page Insights provides basic conversation volume data for free. Add analytics in v2 once content patterns are stable.
+**Defer to v1.3** unless onboarding experience proves painful. Manual entry is fine for the first 2-3 clients.
 
 ---
 
-## Feature Dependencies (Build Order)
+## Anti-Features
 
-The table stakes features have a natural dependency chain that determines implementation order:
+Do not build these in v1.2. Rationale provided.
+
+---
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|---|---|---|
+| Self-service client registration | Opens the platform to arbitrary signups. For an internal tool serving a known set of clients, this adds spam risk and removes operator control. | Super-admin creates accounts manually. |
+| Invitation emails | Adds SMTP/email service dependency (SendGrid, SES, etc.) and email deliverability concerns. Not worth it for a small number of clients. | Super-admin hands credentials to clients directly. |
+| Multi-level user roles per tenant | "Admin within a tenant," "editor," "viewer" — not needed when each tenant is one person or a small team with identical access needs. | One role per tenant: `client`. All client users have full access to their own Pages. |
+| Rich text / markdown in Q&A answers | Messenger renders plain text only. Markdown syntax would appear as literal characters to end users. | Plain text only, with character count. |
+| Visual flow builder (drag-and-drop) | High implementation cost (React DnD or similar), high bug surface. For a tree with max 2 levels and 13 nodes, a form-based editor is sufficient. | Structured add/edit/delete form. |
+| White-labeling / custom domain per tenant | Adds DNS, SSL cert management, and domain routing complexity. Not needed for this client count. | Single domain for all tenants. |
+| Conversation inbox / live chat in the admin panel | Clients can already see and reply to conversations in the standard Facebook Page inbox. Duplicating it here is redundant and requires real-time infrastructure (websockets). | Direct clients to manage conversations in the Facebook Page inbox. |
+| Analytics dashboard | Requires a data pipeline, aggregation queries, and charting. Facebook Page Insights provides basic volume data for free. | Add in v1.3 once content is stable. |
+| Soft delete / content versioning | Adds complexity to queries and the editor. Save = live = current truth. | Rely on audit log (differentiator) for history. |
+| Outbound / broadcast messaging | Requires Facebook App Review for `pages_messaging` with the broadcast use case, plus 24-hour window enforcement and opt-in management. Regulatory minefield. | Respond-only. All conversations user-initiated. |
+
+---
+
+## Feature Dependencies
 
 ```
-1. Webhook event handling + postback routing
+Super-Admin Account Creation
         |
         v
-2. Messenger Profile API setup (Get Started button + Persistent Menu)
+Client Login (JWT + tenant context)
         |
         v
-3. Quick reply button sender (message send wrapper)
+Facebook Page OAuth Connection
         |
-        v
-4. Menu state machine (tracks where user is in the flow)
+        +----> Connected Pages Dashboard
+        |               |
+        |               v
+        |       Token Health Monitor (differentiator)
         |
-        v
-5. Obsidian vault reader in FastAPI (reads markdown, returns answer by key)
-        |
-        v
-6. Product Q&A flow (wires menu state to vault reader)
-        |
-        v
-7. Escalation flow + Handover Protocol setup
-        |
-        v
-8. Fallback handler + session restart logic
+        +----> DB-Backed Config Store
+                        |
+                        +----> Welcome Text Editor
+                        |
+                        +----> Menu Structure Editor
+                        |
+                        +----> Q&A Content Editor
+                        |               |
+                        |               +----> Bulk CSV Import (differentiator, defer)
+                        |
+                        +----> Escalation Settings Editor
+                        |
+                        v
+                Multi-Page Webhook Routing (bot layer)
 ```
 
-Differentiators can be layered on after step 6 (typing indicator, "Was this helpful?") and step 7 (escalation context forwarding).
+**Critical path:** Auth → OAuth → DB Schema → Bot page-awareness. Everything else is content editing UI layered on top of that foundation.
 
 ---
 
-## Messenger Platform Constraints (Affects Feature Design)
+## Messenger Platform Constraints Affecting Admin UI Design
 
-These are hard platform limits that affect how features must be built. They are not design choices — they are constraints imposed by Facebook.
+These are hard limits from the Facebook platform, not UX preferences. Build them into form validation.
 
-| Constraint | Limit | Impact |
-|------------|-------|--------|
-| Quick replies per message | 13 max | Menu branches cannot have more than 13 options |
-| Quick reply label length | 20 characters | Menu item names must be short |
-| Persistent menu top-level items | 3 max | Only 3 top-level categories |
-| Persistent menu items per level | 5 max | Categories can have at most 5 sub-items |
-| Message text length | 2000 characters | Long answers need truncation logic |
-| 24-hour messaging window | Cannot message after 24h of user inactivity without a tag | Bot can only respond, not initiate |
-| Handover Protocol | Required for bot-to-human handoff | Must configure Page inbox as secondary receiver |
+| Constraint | Limit | Admin UI Impact |
+|---|---|---|
+| Quick replies per message | 13 max | Menu level item count cap — enforce in editor |
+| Quick reply label length | 20 characters | Character counter + hard trim in editor |
+| Persistent menu top-level items | 3 max | Top-level menu section cap |
+| Persistent menu nested items | 5 max per level | Sub-item count cap |
+| Message text length | 2000 characters | Welcome text and answer character limit |
+| Page access token | Long-lived but revocable | Token health check needed |
+| App Review required for `pages_messaging` | Required for non-app-role users | All clients must be Tester/Developer on the FB App during development; full App Review needed before production launch |
 
 ---
 
-## MVP Feature Set
+## MVP Recommendation for v1.2
 
-Build in this order for a working v1:
+Build in this order:
 
-1. Get Started + welcome message
-2. Persistent menu with 2-3 top-level items
-3. Quick reply navigation
-4. Product Q&A flow (one product category as proof of concept)
-5. Fallback handler
-6. Human escalation with Handover Protocol
+1. **Auth foundation** — super-admin creates client, client logs in, JWT with tenant_id
+2. **DB schema** — tenants, pages, page_config, qa_categories, qa_items, escalation_config
+3. **Facebook OAuth** — connect Page, store token, list connected Pages
+4. **Bot page-awareness** — webhook routing by page_id, token lookup from DB
+5. **Welcome text editor** — simplest content field, proves the DB → bot pipeline works
+6. **Escalation settings editor** — fixes an existing pain point (currently hardcoded per-env)
+7. **Q&A content editor** — replaces vault entirely, main content management function
+8. **Menu structure editor** — most complex content form, build last
 
-Add after MVP is stable:
+**Defer to v1.3:**
+- Token health monitoring
+- Content change preview
+- Audit log
+- Bulk CSV import
 
-- "Was this helpful?" confirmation
-- Typing indicator
-- Escalation context forwarding
-- Full product category coverage in the vault
+---
+
+## Sources
+
+- Meta Permissions Reference: https://developers.facebook.com/docs/permissions/
+- Meta Pages API: https://developers.facebook.com/docs/pages-api/
+- Meta Access Token Guide: https://developers.facebook.com/docs/facebook-login/guides/access-tokens/
+- WorkOS multi-tenant RBAC guide: https://workos.com/blog/how-to-design-multi-tenant-rbac-saas
+- Logto multi-tenant SaaS implementation guide: https://blog.logto.io/build-multi-tenant-saas-application
+- Chatfuel multi-page connection pattern (industry reference): https://saleshive.com/vendors/chatfuel/
+- Facebook App Review for bots: https://respond.io/blog/skip-facebook-bot-verification
+- Meta Messenger App Review: https://developers.facebook.com/docs/messenger-platform/app-review/
+- UX account switcher patterns: https://medium.com/ux-power-tools/breaking-down-the-ux-of-switching-accounts-in-web-apps-501813a5908b

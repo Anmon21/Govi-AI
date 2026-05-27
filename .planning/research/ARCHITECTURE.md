@@ -1,437 +1,509 @@
-# Architecture Research
+# Architecture Patterns: Admin Panel & Multi-Page Support
 
-**Project:** Govi Facebook Messenger Customer Support Bot
-**Researched:** 2026-05-14
-**Confidence:** HIGH — grounded in existing codebase; no speculative components
+**Project:** Govi Facebook Messenger Customer Support Bot — v1.2
+**Researched:** 2026-05-27
+**Confidence:** HIGH — grounded in existing codebase analysis + official Meta docs + verified library patterns
 
 ---
 
-## System Overview
+## Context: What Exists Today
+
+The system is two independent processes:
+
+- **Messenger Bot** (`messenger-bot/src/index.ts`, ~420 LOC): Express/TypeScript, handles Facebook webhook, drives rule-based menus, reads content from FastAPI, sends messages via Graph API. Single-page: `PAGE_ACCESS_TOKEN` is a single env var.
+- **FastAPI backend** (`app/`): Python, serves Q&A content from Obsidian vault markdown files, no database.
+
+No database exists. Content is file-based. Page identity is implicit (one token, one page).
+
+---
+
+## Target Architecture (v1.2)
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│            Obsidian Vault (local filesystem)             │
-│   /path/to/vault/*.md  — Q&A content, menu definitions  │
-└────────────────────────┬────────────────────────────────┘
-                         │ read on startup + optional reload
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│           Govi AI API  (Python / FastAPI)                │
-│   app/routers/content.py  — GET /content/menu           │
-│   app/routers/content.py  — GET /content/answer/{id}    │
-│   app/services/vault.py   — markdown parser, cache       │
-│   app/routers/health.py   — GET /health                 │
-└────────────────────────┬────────────────────────────────┘
-                         │ HTTP GET (axios, internal network)
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│        Messenger Bot  (Node.js / Express / TypeScript)   │
-│   src/index.ts          — webhook entry point            │
-│   src/menu.ts           — rule engine, state machine     │
-│   src/messenger.ts      — Graph API send helpers         │
-│   src/session.ts        — in-memory session store        │
-└────────────────────────┬────────────────────────────────┘
-                         │ POST /webhook (Facebook → bot)
-                         │ Graph API calls (bot → Facebook)
-                         ▼
-┌─────────────────────────────────────────────────────────┐
-│              Facebook Messenger Platform                 │
-│   Webhook events inbound / Send API outbound             │
-│   Page inbox visible to admin (human escalation)         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                  Admin Panel  (React + Vite + TypeScript)        │
+│   admin-panel/src/  — served as static files on port 5173 (dev) │
+│   Login, tenant management, page connection, content editor      │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ HTTP (axios, JWT Bearer)
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│               FastAPI backend  (Python, port 8000)              │
+│   app/routers/auth.py        — POST /auth/login, /auth/refresh  │
+│   app/routers/tenants.py     — CRUD /admin/tenants              │
+│   app/routers/pages.py       — CRUD /admin/pages, OAuth flow    │
+│   app/routers/page_config.py — CRUD /admin/pages/{id}/config    │
+│   app/routers/content.py     — EXISTING (keep for bot use)      │
+│   app/db/database.py         — SQLAlchemy async engine (SQLite)  │
+│   app/db/models.py           — ORM models                       │
+│   app/db/crud.py             — DB query helpers                 │
+└────────────┬──────────────────────────────────────────┬─────────┘
+             │ DB read on each webhook (page lookup)    │ alembic migrations
+             │                                           ▼
+             │                              ┌────────────────────┐
+             │                              │   govi.db (SQLite) │
+             │                              │   Tenants          │
+             │                              │   Pages            │
+             │                              │   PageConfig       │
+             │                              └────────────────────┘
+             │ HTTP GET /content?page_id=...  (new param)
+             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           Messenger Bot  (Node.js/TypeScript, port 3000)         │
+│   src/index.ts  — webhook handler (MODIFIED: extract page_id,  │
+│                   look up token + config from FastAPI per event) │
+│   src/pageContext.ts — NEW: fetch and cache per-page config      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ POST /webhook (all pages → same URL)
+                             │ Graph API calls (token from DB lookup)
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Facebook Messenger Platform                         │
+│   Multiple Pages, each subscribed to the same webhook URL        │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-The Anthropic SDK call in `app/routers/ai.py` is removed entirely. The `/ai` router
-is replaced (or retired) with a `/content` router. The messenger bot's forward-to-AI
-logic is replaced with a local rule engine that drives menus and calls FastAPI only
-for content lookup.
 
 ---
 
-## Component Boundaries
+## New Components Required
 
-### Messenger Bot (Node.js / TypeScript)
+| Component | Type | Location | Purpose |
+|-----------|------|----------|---------|
+| Admin Panel | New service | `admin-panel/` | React SPA: tenant + page + content management |
+| SQLite database | New persistence | `govi.db` (project root) | Stores tenants, pages, per-page config |
+| DB layer | New module | `app/db/` | SQLAlchemy models, async engine, CRUD helpers |
+| Auth router | New module | `app/routers/auth.py` | JWT login/refresh for super-admin + tenants |
+| Tenant router | New module | `app/routers/tenants.py` | Super-admin CRUD for tenant accounts |
+| Pages router | New module | `app/routers/pages.py` | Per-tenant page connection (OAuth flow) |
+| Page config router | New module | `app/routers/page_config.py` | Per-page welcome text, menu, Q&A, escalation |
+| Page context module | New module | `messenger-bot/src/pageContext.ts` | Cache page token + config keyed by page_id |
 
-- **Responsibility:** All Facebook interaction. Owns the webhook, owns session state,
-  owns menu navigation logic, owns Graph API calls.
-- **Data it owns:** Per-user session state (current menu position, awaiting-escalation
-  flag). Ephemeral — lives in-process memory, not persisted.
-- **What it does NOT do:** Parse markdown, store Q&A content, know anything about file
-  paths. It asks FastAPI for content by ID and renders what it gets back.
-- **Internal modules to create:**
-  - `src/session.ts` — `Map<senderId, SessionState>` where `SessionState = { menuPath: string[], awaitingEscalation: boolean }`.
-  - `src/menu.ts` — takes a session + incoming message text/postback, returns the next
-    reply (text or quick-reply buttons) and updates session.
-  - `src/messenger.ts` — thin wrappers over the Graph API: `sendText`, `sendQuickReplies`, `sendButtons`.
+## Modified Components
 
-### Govi AI API (Python / FastAPI)
-
-- **Responsibility:** Content layer. Reads Obsidian vault markdown files, parses them
-  into structured Q&A + menu data, and exposes that data via HTTP endpoints.
-- **Data it owns:** The parsed, in-memory content cache loaded from the vault.
-- **What it does NOT do:** Manage conversation state, call Facebook, know about users
-  or sessions.
-- **New modules to create:**
-  - `app/services/vault.py` — loads and parses markdown files from `VAULT_PATH` into a
-    `ContentCache` dict at startup. Exposes `get_menu(menu_id)` and `get_answer(answer_id)`.
-  - `app/routers/content.py` — `GET /content/menu/{menu_id}` and
-    `GET /content/answer/{answer_id}` endpoints; thin wrappers over the vault service.
+| Component | Change | Why |
+|-----------|--------|-----|
+| `app/routers/content.py` | Add `page_id` filter to all queries | Content is now per-page, not global |
+| `app/config.py` | Add `db_path`, `jwt_secret`, `facebook_app_secret`, `facebook_app_id` | New required config |
+| `app/main.py` | Register new routers; initialize DB on startup | Wire new components |
+| `messenger-bot/src/index.ts` | Extract `entry.id` (page_id); route all Graph API calls through `pageContext` | Multi-page token dispatch |
+| `messenger-bot/.env.example` | Remove `FACEBOOK_PAGE_ACCESS_TOKEN` (now in DB); add `ADMIN_API_URL` | Config changes |
 
 ---
 
-## Data Flow
+## SQLite Schema
 
-### Step-by-step: Obsidian vault content reaching a Messenger user
+Single shared database, single file. Shared-table multi-tenancy (tenant_id FK on every table). This is correct at this scale — a few tenants, a few pages each. Database-per-tenant would be premature.
 
-```
-1. FastAPI startup
-   app/services/vault.py reads all *.md files under VAULT_PATH.
-   Each file is parsed into a structured dict:
-     { id, type: "menu"|"answer", title, items/body }
-   Result stored in a module-level ContentCache dict.
-   Startup fails fast if VAULT_PATH is missing or no files found.
+```sql
+-- Tenants: super-admin creates these. Super-admin is tenant_id=1 or a role flag.
+CREATE TABLE tenants (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    email       TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,          -- bcrypt
+    role        TEXT NOT NULL DEFAULT 'client',  -- 'super_admin' | 'client'
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-2. User sends a message on Messenger
-   Facebook POSTs a webhook event to messenger-bot POST /webhook.
-   Bot ACKs immediately with HTTP 200 (existing pattern — keep this).
+-- Pages: each tenant connects one or more Facebook Pages via OAuth.
+CREATE TABLE pages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id       INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    facebook_page_id TEXT NOT NULL UNIQUE,   -- the FB Page ID from the webhook entry.id
+    page_name       TEXT NOT NULL,
+    page_access_token TEXT NOT NULL,         -- long-lived token, stored encrypted
+    subscribed_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    active          INTEGER NOT NULL DEFAULT 1   -- 0=disabled
+);
 
-3. Bot resolves session
-   src/session.ts looks up senderId in the in-memory Map.
-   If no session exists, creates one at the root menu.
+-- PageConfig: one row per page, all customizable content.
+CREATE TABLE page_configs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_id         INTEGER NOT NULL UNIQUE REFERENCES pages(id) ON DELETE CASCADE,
+    welcome_text    TEXT NOT NULL DEFAULT 'Welcome! How can I help you today?',
+    menu_config     TEXT NOT NULL DEFAULT '[]',  -- JSON array of menu items
+    escalation_admin_psid TEXT,                  -- ADMIN_PSID for this page
+    escalation_message TEXT NOT NULL DEFAULT 'Connecting you with a human agent.',
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-4. Bot determines intent
-   src/menu.ts inspects the incoming payload:
-   - Quick-reply postback payload → navigate to the specified menu/answer ID
-   - Free text "hi"/"hello"/"start" → reset to root menu
-   - Free text matching no known command → send "I didn't understand" + re-send current menu
-   - "Talk to a human" → trigger escalation flow
+-- QAItems: replaces Obsidian vault. Content belongs to a page.
+CREATE TABLE qa_items (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_id     INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    item_type   TEXT NOT NULL,   -- 'category' | 'question'
+    category_id INTEGER REFERENCES qa_items(id),  -- NULL for categories
+    title       TEXT NOT NULL,
+    body        TEXT NOT NULL DEFAULT '',
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-5. Bot fetches content from FastAPI (when needed)
-   GET http://localhost:{GOVI_AI_PORT}/content/menu/{menu_id}
-   or GET .../content/answer/{answer_id}
-   FastAPI returns JSON from its in-memory cache (no disk I/O on request).
-
-6. Bot renders response
-   src/messenger.ts calls the Graph API:
-   - Menu node → sendQuickReplies(senderId, title, options[])
-   - Answer node → sendText(senderId, body) then sendQuickReplies back to parent menu
-   - Escalation → sendText(senderId, "Connecting you to a human...") + notify admin
-
-7. Session updated
-   src/session.ts stores new menuPath position after each interaction.
-```
-
-### Human escalation sub-flow
-
-```
-User taps "Talk to a human" button
-  → Bot sets session.awaitingEscalation = true
-  → Bot sends user a confirmation message via Graph API
-  → Bot sends a message to the admin's own Messenger inbox:
-      POST /me/messages with recipient: { id: ADMIN_PSID }
-      Body: "Customer {senderId} is requesting human support."
-  → Conversation thread in Page inbox becomes visible to admin
-  → Admin replies directly in Page inbox — Facebook routes it to the user
-  → No further bot responses until user sends a new "start" trigger
-      (or session TTL expires)
+CREATE INDEX idx_pages_facebook_page_id ON pages(facebook_page_id);
+CREATE INDEX idx_qa_items_page_id_type ON qa_items(page_id, item_type);
+CREATE INDEX idx_qa_items_category ON qa_items(category_id);
 ```
 
-The admin PSID (Page-Scoped ID of the admin's own Facebook account) is stored as
-`ADMIN_PSID` in `messenger-bot/.env`. This requires the admin to have messaged the
-Page at least once so Facebook assigns them a PSID.
+**Key design decisions:**
+- `pages.facebook_page_id` is the lookup key on every webhook event (`entry.id` in the payload)
+- `page_configs.menu_config` stored as JSON text for flexibility without schema churn; bot parses at load time
+- `qa_items` replaces Obsidian vault entirely; category/question hierarchy via self-referencing FK
+- Page access tokens must be encrypted at rest (AES-256 or Fernet) — plain storage is unacceptable
 
 ---
 
-## Conversation State
+## Multi-Page Bot: Token Dispatch
 
-### Problem
+### The Problem Today
 
-Facebook webhook is stateless by design. Each POST contains only the current message.
-The bot has no built-in memory of what menu the user was on.
+`PAGE_ACCESS_TOKEN` is a module-level constant. Every Graph API call uses it. This must become a per-event lookup.
 
-### Solution: In-process session Map with TTL
+### The Incoming Webhook Payload
 
-Use a `Map<senderId, SessionState>` in `src/session.ts`. This is the right choice for
-this scale (single-process Node.js bot, no horizontal scaling requirement, no
-persistence requirement between restarts).
+Facebook delivers all pages' events to the same webhook URL. The `entry.id` field is the Facebook Page ID:
+
+```json
+{
+  "object": "page",
+  "entry": [
+    {
+      "id": "123456789",           // ← this is the Facebook Page ID
+      "time": 1234567890,
+      "messaging": [{ "sender": { "id": "..." }, ... }]
+    }
+  ]
+}
+```
+
+### Lookup Pattern
+
+On every webhook event, before any Graph API call, the bot must resolve the page's token and config from the database via FastAPI:
+
+```
+entry.id (Facebook Page ID)
+  → GET http://localhost:8000/internal/pages/{facebook_page_id}/context
+  → returns { page_access_token, welcome_text, escalation_admin_psid, escalation_message, menu_config }
+  → bot uses token for all Graph API calls for this event
+```
+
+A `/internal/pages/{id}/context` endpoint on FastAPI serves page context to the bot. This endpoint is internal-only (not exposed to the admin panel UI users) and protected by a shared secret between the two services.
+
+### In-Process Cache
+
+The bot caches page context in a `Map<facebookPageId, PageContext>` to avoid a DB lookup on every single event. Cache entries are refreshed on a TTL (5 minutes is sufficient — config changes are not real-time critical). The existing `userNameCache` and `lastMessageCache` patterns in `index.ts` already demonstrate this Map-based cache pattern.
 
 ```typescript
-// src/session.ts
-interface SessionState {
-  menuPath: string[];       // e.g. ["root", "products", "sizing"]
-  awaitingEscalation: boolean;
-  lastActivityAt: number;   // unix ms — for TTL eviction
+// messenger-bot/src/pageContext.ts
+interface PageContext {
+  pageAccessToken: string;
+  welcomeText: string;
+  escalationAdminPsid: string | null;
+  escalationMessage: string;
+  menuConfig: MenuItem[];
+  cachedAt: number;
 }
 
-const sessions = new Map<string, SessionState>();
-const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const PAGE_CONTEXT_TTL_MS = 5 * 60 * 1000;
+const pageContextCache = new Map<string, PageContext>();
 
-export function getSession(senderId: string): SessionState { ... }
-export function updateSession(senderId: string, patch: Partial<SessionState>): void { ... }
-export function clearSession(senderId: string): void { ... }
-
-// Eviction: call pruneExpiredSessions() on a setInterval (every 5 min is fine)
+export async function getPageContext(facebookPageId: string): Promise<PageContext | null> { ... }
 ```
 
-### Why not Redis or a database?
-
-Redis adds a deployment dependency with no benefit at this scale. The bot is a single
-Node.js process; in-memory is sufficient. Session loss on restart is acceptable — users
-simply re-navigate from the root menu, which takes seconds.
-
-### Why not stateless (reconstruct state from postback payload)?
-
-Embedding full state in every quick-reply payload is possible but brittle: payload size
-limits (1000 bytes per Facebook), and escalation state cannot be encoded in a button
-payload the user hasn't clicked yet. Thin in-memory session is cleaner.
-
-### Stateless webhook contract
-
-The bot MUST return HTTP 200 within 20 seconds (Facebook requirement — already
-implemented). All Graph API calls happen after the 200 response, in the same async
-flow that already exists in `messenger-bot/src/index.ts`. No change needed here.
+All functions that currently accept `PAGE_ACCESS_TOKEN` as a module-level constant (`sendMessage`, `passThreadControl`, `sendTypingIndicator`, `fetchUserName`) must be refactored to accept `pageAccessToken: string` as a parameter. This is the most invasive change in the bot.
 
 ---
 
-## FastAPI: Obsidian Content Loading Strategy
+## Facebook OAuth: Page Connection Flow
 
-### Recommendation: Load-on-startup with manual reload endpoint
+The admin panel connects a client's Facebook Page to the system. The flow:
 
-Load all vault content once at FastAPI startup using the `lifespan` pattern. Serve all
-requests from the in-memory cache. Provide a `POST /content/reload` endpoint that
-re-reads the vault without restarting the process.
+```
+1. Admin panel: client clicks "Connect with Facebook"
+   → Frontend redirects to:
+     https://www.facebook.com/v21.0/dialog/oauth
+       ?client_id={APP_ID}
+       &redirect_uri={BACKEND_URL}/oauth/facebook/callback
+       &scope=pages_show_list,pages_messaging,pages_manage_metadata
+       &state={JWT_of_tenant_id}   ← CSRF protection
 
-```python
-# app/services/vault.py
-from pathlib import Path
+2. User grants permission on Facebook
+   → Facebook redirects to /oauth/facebook/callback?code=...&state=...
 
-_cache: dict[str, dict] = {}
+3. FastAPI /oauth/facebook/callback:
+   a. Verify state JWT (contains tenant_id)
+   b. Exchange code → short-lived user token:
+      GET https://graph.facebook.com/v21.0/oauth/access_token
+        ?client_id=...&client_secret=...&redirect_uri=...&code=...
+   c. Exchange short-lived → long-lived user token:
+      GET https://graph.facebook.com/v21.0/oauth/access_token
+        ?grant_type=fb_exchange_token&client_id=...&client_secret=...&fb_exchange_token=...
+   d. Fetch pages the user administers:
+      GET https://graph.facebook.com/v21.0/me/accounts?access_token={long_lived_user_token}
+      → returns [{id, name, access_token (long-lived page token), tasks}, ...]
+   e. For each page returned:
+      - Upsert row in `pages` table (encrypt token before storing)
+      - Upsert default row in `page_configs`
+      - POST /me/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins
+        with the page's access token (subscribes the page to the webhook)
+   f. Redirect back to admin panel with success/error
 
-def load_vault(vault_path: str) -> None:
-    """Parse all *.md files and populate _cache. Called at startup."""
-    ...
-
-def get_menu(menu_id: str) -> dict | None:
-    return _cache.get(menu_id)
-
-def get_answer(answer_id: str) -> dict | None:
-    return _cache.get(answer_id)
-
-def reload_vault(vault_path: str) -> int:
-    """Re-parse vault in place. Returns count of loaded items."""
-    _cache.clear()
-    load_vault(vault_path)
-    return len(_cache)
+4. Admin panel: shows connected pages list
 ```
 
-```python
-# app/main.py — lifespan for startup load
-from contextlib import asynccontextmanager
-from app.services import vault
-from app.config import settings
+Required Facebook App permissions: `pages_show_list`, `pages_messaging`, `pages_manage_metadata`. These require Facebook App Review before use by non-test users.
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    vault.load_vault(settings.vault_path)
-    yield
+Long-lived Page Access Tokens from step (d) do not expire (they only invalidate if the user changes their Facebook password or the Page role changes). Store them encrypted.
 
-app = FastAPI(lifespan=lifespan)
+---
+
+## Admin Panel: Component Structure
+
+React + Vite + TypeScript SPA. New third service at `admin-panel/`. Communicates with FastAPI only.
+
+```
+admin-panel/
+  src/
+    api/          — axios instance with JWT interceptors (request: inject Bearer, response: 401 → refresh)
+    pages/        — route-level components
+      LoginPage.tsx
+      DashboardPage.tsx         — tenant's connected pages overview
+      PagesPage.tsx             — add/remove pages, OAuth connect button
+      PageEditorPage.tsx        — welcome text, menu, Q&A, escalation editors
+      TenantsPage.tsx           — super-admin only: create/list tenants
+    components/   — shared UI components (table, form, sidebar nav)
+    hooks/        — useAuth(), usePageConfig(), useQAItems()
+    store/        — JWT tokens in memory (access) + httpOnly cookie (refresh)
+  index.html
+  vite.config.ts
+  tsconfig.json
+  package.json
 ```
 
-### Why not watchdog / file watcher?
+Auth model:
+- Super-admin creates tenant accounts (email + password)
+- Tenants log in; JWT includes `tenant_id` and `role`
+- FastAPI enforces: `role=super_admin` required for tenant management endpoints; `role=client` can only see/edit pages belonging to their `tenant_id`
+- Access token: short-lived JWT (15 min) in memory. Refresh token: longer-lived JWT (7 days) in httpOnly cookie. Axios interceptor auto-refreshes on 401.
 
-A file watcher (watchdog library) running in the same process as FastAPI creates a
-threading hazard: the watcher thread modifies `_cache` while the async event loop
-reads it. Handling this safely requires a lock. That complexity is not justified when
-the content editor (the Obsidian user) can simply call `POST /content/reload` after
-saving. One `curl` command or a Messenger admin command ("reload content") achieves
-the same result with zero background threads.
-
-### Why not re-read files on every request?
-
-File I/O on every request is unnecessary latency and couples request throughput to
-filesystem speed. The vault content changes rarely (content edits, not per-user). Cache
-it.
-
-### Vault markdown format convention
-
-Define a minimal frontmatter convention for Obsidian files so the parser has a stable
-contract:
-
-```markdown
----
-id: products-sizing
-type: menu
-title: "Sizing Questions"
 ---
 
-- What size should I order? → answer:sizing-guide
-- Do you ship internationally? → answer:shipping-info
+## FastAPI: New Router Structure
+
+```
+app/
+  db/
+    database.py      — create_async_engine (sqlite+aiosqlite:///govi.db), get_db dependency
+    models.py        — SQLAlchemy ORM models mirroring schema above
+    crud.py          — typed query helpers (get_page_by_facebook_id, etc.)
+  routers/
+    auth.py          — POST /auth/login, POST /auth/refresh, GET /auth/me
+    tenants.py       — GET/POST/DELETE /admin/tenants  (super_admin only)
+    pages.py         — GET/POST/DELETE /admin/pages, GET /oauth/facebook/callback
+    page_config.py   — GET/PUT /admin/pages/{id}/config
+    qa.py            — CRUD /admin/pages/{id}/qa
+    internal.py      — GET /internal/pages/{facebook_page_id}/context  (bot-facing, shared secret)
+    content.py       — MODIFIED: reads from DB instead of vault file; filtered by page_id
+    health.py        — unchanged
 ```
 
-```markdown
----
-id: sizing-guide
-type: answer
-title: "Sizing Guide"
+The existing vault-based `content.py` router is replaced with a DB-backed version. The HTTP contract (`GET /content?type=&category=`, `GET /content/{id}`) stays identical so the bot code changes minimally on the content-fetch path.
+
 ---
 
-Our sizing runs true to standard US sizes. Check the chart on the product page.
+## Data Flow: Webhook Event (Multi-Page)
+
+```
+1. Facebook POSTs to /webhook
+   Body: { object: "page", entry: [{ id: "PAGE_FB_ID", messaging: [...] }] }
+
+2. Messenger bot: extract pageId = entry.id
+
+3. Bot calls getPageContext(pageId):
+   - Cache hit (< 5 min old): return cached PageContext
+   - Cache miss: GET /internal/pages/{pageId}/context (FastAPI → DB query)
+   - Context not found: log warning, drop event silently (unknown page)
+
+4. For each event in entry.messaging:
+   - handleWebhookEvent(event, pageContext)
+   - All Graph API calls use pageContext.pageAccessToken
+   - Welcome text from pageContext.welcomeText
+   - Escalation config from pageContext.escalation*
+   - Menu structure from pageContext.menuConfig
+
+5. Content fetch (for Q&A):
+   GET /content?type=category&page_id={pageId}
+   GET /content/{questionId}?page_id={pageId}
+   FastAPI queries qa_items WHERE page_id = {resolved page row id}
 ```
 
-The parser reads `id`, `type`, `title` from frontmatter; body below the `---` is the
-answer text or list of menu items. The `python-frontmatter` library handles this
-cleanly (one dependency addition to `requirements.txt`).
+---
+
+## Build Order: Recommended Phase Sequence
+
+Dependencies flow strictly top-to-bottom. Each phase delivers something runnable and testable before the next starts.
+
+### Phase 10: DB Foundation
+**Goal:** SQLite database initialized, ORM models defined, Alembic migration working, `govi.db` created with empty tables.
+**Deliverables:**
+- `app/db/database.py` — async SQLAlchemy engine (`sqlite+aiosqlite`)
+- `app/db/models.py` — Tenant, Page, PageConfig, QAItem ORM models
+- `alembic/` — initial migration creating all four tables
+- `app/config.py` gains `db_path`, `jwt_secret`, `facebook_app_id`, `facebook_app_secret`
+**Verify:** `alembic upgrade head` creates `govi.db` with correct schema. No service changes yet.
+
+### Phase 11: Auth (FastAPI)
+**Goal:** JWT login/refresh working. Super-admin bootstrapped from env var (seed script). Admin panel can authenticate.
+**Deliverables:**
+- `app/db/crud.py` — `get_tenant_by_email`, `verify_password`
+- `app/routers/auth.py` — `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`
+- Seed script: creates super-admin from `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` env vars on first run
+- `app/dependencies.py` — `get_current_tenant` FastAPI dependency using JWT decode
+**Verify:** `POST /auth/login` with seed credentials returns access + refresh tokens. `GET /auth/me` with Bearer token returns tenant info.
+
+### Phase 12: Tenant & Page Admin API (FastAPI)
+**Goal:** CRUD endpoints for tenants and pages operational. OAuth callback stores tokens.
+**Deliverables:**
+- `app/routers/tenants.py` — GET/POST/DELETE `/admin/tenants` (super_admin only)
+- `app/routers/pages.py` — list/delete pages per tenant + `GET /oauth/facebook/callback`
+- Token encryption helper (Fernet from `cryptography` library)
+- `POST /oauth/facebook/callback` full flow: code exchange → long-lived user token → page list → upsert pages + page_configs → subscribe webhook
+**Verify:** Connect a real test Facebook Page through the OAuth flow. Row appears in `pages` table with encrypted token. Page receives subscribed_apps confirmation.
+
+### Phase 13: Page Config & Q&A API (FastAPI)
+**Goal:** Per-page content fully editable via API. Bot can read DB-backed content.
+**Deliverables:**
+- `app/routers/page_config.py` — GET/PUT `/admin/pages/{id}/config` (welcome, escalation)
+- `app/routers/qa.py` — full CRUD `/admin/pages/{id}/qa` (categories + questions)
+- `app/routers/content.py` MODIFIED — reads from `qa_items` DB table filtered by `page_id` (same HTTP contract as before)
+- `app/routers/internal.py` — `GET /internal/pages/{facebook_page_id}/context` protected by shared secret header
+**Verify:** Create Q&A items via API, then `GET /content?type=category&page_id=X` returns them. Vault-based content.py retired.
+
+### Phase 14: Bot Multi-Page Routing
+**Goal:** Bot reads token + config from DB per event. Works with multiple pages simultaneously.
+**Deliverables:**
+- `messenger-bot/src/pageContext.ts` — `getPageContext(facebookPageId)` with 5-min TTL cache
+- `messenger-bot/src/index.ts` MODIFIED — extract `entry.id`, thread pageContext through all handlers
+- All Graph API helpers (`sendMessage`, `sendTypingIndicator`, `passThreadControl`, `fetchUserName`) gain `pageAccessToken: string` parameter
+- `handleEscalation` reads admin PSID + escalation message from pageContext (not env vars)
+- `handleWebhookEvent` receives `pageContext` and uses it for welcome text + escalation config
+- Remove `PAGE_ACCESS_TOKEN` and `ADMIN_PSID` env vars from bot (now in DB)
+**Verify:** Two test pages both receive correct responses. Token from each page's context used exclusively.
+
+### Phase 15: Admin Panel UI
+**Goal:** React SPA functional for tenant login, page connection, and content editing.
+**Deliverables:**
+- `admin-panel/` initialized: Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui + axios
+- Login page → JWT stored (access in memory, refresh in httpOnly cookie)
+- Pages dashboard: list connected pages, "Connect with Facebook" OAuth button
+- Page editor: welcome text, escalation config, Q&A category + question editor
+- Super-admin tenant management page
+- Axios instance with JWT refresh interceptor
+**Verify:** Full manual walkthrough — login → connect page → add Q&A content → send Messenger message → receives correct answer from DB content.
 
 ---
 
-## Build Order
+## Component Interaction Matrix
 
-Build in strict dependency order — each step produces something the next step calls.
-
-### 1. FastAPI content router + vault service
-
-**Why first:** Everything else depends on content existing. The bot cannot be tested
-without something to call. FastAPI is also independently testable with `curl` before
-touching the bot.
-
-**Deliverables:**
-- `app/services/vault.py` with `load_vault`, `get_menu`, `get_answer`, `reload_vault`
-- `app/routers/content.py` with `GET /content/menu/{id}`, `GET /content/answer/{id}`,
-  `POST /content/reload`
-- `app/config.py` gains `vault_path: str` field
-- At least two sample Obsidian `.md` files for local testing
-
-**Verify:** `curl http://localhost:8000/content/menu/root` returns JSON.
-
-### 2. Session store in the bot
-
-**Why second:** Menu logic depends on session; session has no external dependencies.
-Implement and unit-test in isolation before wiring to Messenger.
-
-**Deliverables:**
-- `messenger-bot/src/session.ts` — Map, TTL eviction, get/update/clear
-- Unit tests (Jest or plain ts-node script)
-
-**Verify:** `getSession("fake-id")` returns default root state; `updateSession` mutates
-it; expired sessions are pruned.
-
-### 3. Menu rule engine in the bot
-
-**Why third:** Depends on session (step 2) and content API (step 1). Encapsulates all
-navigation logic with no Messenger coupling, making it testable without Facebook.
-
-**Deliverables:**
-- `messenger-bot/src/menu.ts` — `handleMessage(senderId, payload): Promise<Reply>`
-  calls FastAPI content endpoints, reads/updates session, returns a typed `Reply` object
-  (not Graph API calls directly)
-- `messenger-bot/src/types.ts` — `Reply`, `MenuNode`, `AnswerNode` interfaces
-
-**Verify:** Given a postback payload for a known menu item, `handleMessage` returns the
-correct Reply structure (mock the HTTP call to FastAPI).
-
-### 4. Graph API send helpers
-
-**Why fourth:** Depends on knowing what Reply types exist (step 3). Keeps all Graph API
-surface area in one place.
-
-**Deliverables:**
-- `messenger-bot/src/messenger.ts` — `sendText`, `sendQuickReplies`, `sendButtons`,
-  `notifyAdmin` functions wrapping `axios.post` to the Graph API
-
-**Verify:** With a valid `FACEBOOK_PAGE_ACCESS_TOKEN` in `.env`, manually trigger
-`sendText` to a test PSID.
-
-### 5. Wire everything in bot index.ts
-
-**Why fifth:** All pieces exist; now connect them in the webhook handler. Replaces the
-current AI-passthrough logic.
-
-**Deliverables:**
-- `messenger-bot/src/index.ts` updated: webhook POST handler calls `handleMessage`,
-  then maps the `Reply` to the appropriate `messenger.ts` function
-
-**Verify:** End-to-end test with Facebook webhook — send "hi" and receive the root menu
-quick-reply buttons.
-
-### 6. Human escalation flow
-
-**Why last:** Depends on all of the above being stable, plus requires the `ADMIN_PSID`
-env var which needs a real Facebook Page setup. Implement only after the menu flows work.
-
-**Deliverables:**
-- `messenger.ts` gains `notifyAdmin(senderId)` — sends a message to `ADMIN_PSID`
-- `menu.ts` handles the escalation trigger postback
-- `session.ts` sets `awaitingEscalation = true` and suppresses bot replies while active
-
-**Verify:** Tap "Talk to a human" — admin receives a Messenger notification on their
-Page inbox.
+| From | To | Protocol | Auth | Data |
+|------|----|----------|------|------|
+| Admin Panel | FastAPI `/auth/*` | HTTP/JSON | None (login endpoint) | credentials → JWT |
+| Admin Panel | FastAPI `/admin/*` | HTTP/JSON | JWT Bearer | CRUD payloads |
+| Admin Panel | Facebook | Browser redirect | OAuth2 code flow | none stored client-side |
+| FastAPI | Facebook Graph API | HTTPS | Page Access Token | OAuth code exchange |
+| FastAPI | SQLite (`govi.db`) | SQLAlchemy async | File permissions | ORM models |
+| Messenger Bot | FastAPI `/internal/*` | HTTP/JSON | Shared secret header | page context |
+| Messenger Bot | FastAPI `/content/*` | HTTP/JSON | None (internal network) | Q&A queries |
+| Messenger Bot | Facebook Graph API | HTTPS | Per-page token (from DB) | send messages |
+| Facebook | Messenger Bot `/webhook` | HTTPS POST | HMAC-SHA256 | webhook events |
 
 ---
 
 ## Key Architectural Risks
 
-### Risk: Facebook PSID requirement for admin notification
+### Risk 1: Token Encryption at Rest
+**What:** Page Access Tokens are long-lived and grant full messaging ability on behalf of a Page. Storing them plaintext in SQLite is a critical security failure.
+**Prevention:** Encrypt with Python `cryptography` Fernet (`pip install cryptography`). Store `FERNET_KEY` in env. Decrypt only in memory, only when constructing a Graph API call. Never return the raw token in any API response to the admin panel.
+**Confidence:** HIGH — this is a firm requirement, not optional.
 
-**What can go wrong:** Sending a message to the admin requires the admin's Page-Scoped
-ID (PSID), which Facebook only assigns after the admin has sent at least one message to
-the Page from their personal account.
+### Risk 2: Facebook App Review Required for Production
+**What:** The `pages_messaging` and `pages_manage_metadata` permissions require Facebook App Review before non-test users can grant them. Development against test Pages is fine; production for real clients requires approval.
+**Prevention:** Use test Pages (added as test users in the Facebook App) during development. Plan a Facebook App Review submission as a deployment prerequisite.
+**Confidence:** HIGH — confirmed in Meta developer docs.
 
-**Mitigation:** During setup, the admin must message the Page once. Use the webhook log
-to capture their PSID and store it as `ADMIN_PSID` in `.env`. Document this as a
-required setup step. If `ADMIN_PSID` is not set, the escalation flow falls back to
-logging a console alert — it should not break the bot.
+### Risk 3: Bot Function Signature Refactor Surface
+**What:** Changing `sendMessage`, `sendTypingIndicator`, `passThreadControl`, `fetchUserName` to accept `pageAccessToken` as a parameter touches ~15 call sites and all 50 existing tests.
+**Prevention:** Make the change in one surgical commit (Phase 14). Update tests to pass a mock `pageContext`. The existing test structure (Node.js built-in test runner) is already in place — update fixtures, not test logic.
+**Confidence:** HIGH — invasive but bounded and well-understood.
 
-### Risk: In-memory session loss on bot restart
+### Risk 4: Vault Content Migration
+**What:** Existing Obsidian vault content must be seeded into `qa_items` when the DB-backed content router is deployed. No automated migration exists today.
+**Prevention:** Write a one-time Python seed script (`scripts/seed_from_vault.py`) that reads the vault using the existing `load_vault()` function and inserts rows into `qa_items` for a specified page. Run once during Phase 13 deployment.
+**Confidence:** HIGH — the vault parser already exists in `app/routers/content.py`.
 
-**What can go wrong:** A bot restart (deploy, crash) clears all active sessions. A user
-mid-conversation is silently dropped to the start menu on their next message.
+### Risk 5: Webhook Subscription on Page Connect
+**What:** After storing a Page Access Token, the bot must subscribe the page to receive webhook events. If this subscription POST fails (e.g., insufficient permissions), the page is stored but receives no messages.
+**Prevention:** Make the subscription call (`POST /{page_id}/subscribed_apps`) part of the OAuth callback transaction. If it fails, return an error to the admin panel user and do not save the page row. Log the Graph API error detail.
+**Confidence:** HIGH.
 
-**Mitigation:** This is acceptable. The user sees the root menu again and can re-navigate
-in seconds. Document it. Do not add a database to solve a cosmetic UX issue at this
-scale. If it becomes a real pain point, a Redis session store is a clean upgrade path
-(the session interface in `src/session.ts` hides the implementation).
+### Risk 6: SQLite Concurrency (Admin Panel + Bot concurrent writes)
+**What:** SQLite single-writer constraint. If the admin panel is editing Q&A while the bot is reading page contexts, writes block reads briefly.
+**Prevention:** Enable WAL mode (`PRAGMA journal_mode=WAL`) on database creation. WAL allows concurrent reads during writes, eliminating the primary bottleneck at this scale. Bot reads content; admin panel writes config. This is low-contention by nature.
+**Confidence:** HIGH — WAL is standard practice, well-documented.
 
-### Risk: Vault markdown format drift
-
-**What can go wrong:** The Obsidian user edits files in a way that breaks the
-frontmatter convention (renames a field, changes indentation, removes an ID). The vault
-service either silently skips the file or returns malformed content.
-
-**Mitigation:** The `load_vault` function must log a clear warning per file that fails
-to parse, with the filename and the specific parse error. FastAPI startup should succeed
-(skip bad files) but log loudly. The `POST /content/reload` response should return a
-summary of loaded vs skipped files so the admin knows immediately if a file was rejected.
-
-### Risk: FastAPI content cache serves stale content after vault edits
-
-**What can go wrong:** Admin updates a markdown file in Obsidian, but FastAPI is still
-serving the old cached version. The bot replies with outdated answers.
-
-**Mitigation:** The `POST /content/reload` endpoint is the cache-bust mechanism. This
-requires a manual trigger after edits. For v1 this is fine. The endpoint should require
-no authentication in local deployments but this should be noted as a production concern
-(anyone who can reach the API can trigger a reload).
-
-### Risk: Bot and FastAPI out of sync on menu/answer IDs
-
-**What can go wrong:** A markdown file is renamed or its `id` frontmatter field is
-changed. The bot sends a GET for an ID that no longer exists. FastAPI returns 404. The
-bot has no fallback.
-
-**Mitigation:** `menu.ts` must handle a 404 or null response from FastAPI gracefully:
-send the user a "Something went wrong, let's start over" message and reset their session
-to root. Never surface a raw error to the Messenger user.
-
-### Risk: Session Map grows unbounded
-
-**What can go wrong:** High volume of unique senders over time fills process memory.
-
-**Mitigation:** The TTL eviction in `session.ts` (prune sessions inactive for 30 min
-on a 5-minute interval) keeps the Map bounded. At Messenger-chatbot scale for a single
-retail brand, this is negligible — thousands of entries, not millions. No action needed
-unless traffic profile changes significantly.
+### Risk 7: JWT Secret Rotation
+**What:** `jwt_secret` in env signs all admin panel tokens. If it must rotate, all sessions invalidate simultaneously.
+**Prevention:** Document the rotation procedure. For v1.2 this is acceptable — small number of admin users, not customer-facing tokens.
+**Confidence:** MEDIUM — acceptable risk for this use case.
 
 ---
 
-*Architecture research: 2026-05-14*
+## Anti-Patterns to Avoid
+
+### Anti-Pattern: Store Page Access Token Unencrypted
+**Why bad:** Tokens grant full posting, messaging, and page management ability. A DB read by any SQL tool exposes them.
+**Instead:** Fernet encryption at write time, decryption only at Graph API call time.
+
+### Anti-Pattern: Single Content Table for All Pages Without page_id Index
+**Why bad:** As Q&A items grow, unindexed queries scan all rows. The index `idx_qa_items_page_id_type` ensures fast per-page filtered queries.
+**Instead:** Always filter `WHERE page_id = ?` and rely on the defined index.
+
+### Anti-Pattern: Expose `/internal/` Endpoints Without Auth
+**Why bad:** The `GET /internal/pages/{id}/context` endpoint returns decrypted page tokens. Without protection, any caller who knows the URL gets all page tokens.
+**Instead:** Require a shared secret header (`X-Internal-Secret`) checked against an env var. The bot sets this header; the admin panel never calls this endpoint.
+
+### Anti-Pattern: Return Page Access Token in Admin Panel API Responses
+**Why bad:** The admin panel JavaScript receives it, the token appears in browser devtools, and JS bundle security model doesn't protect it.
+**Instead:** Admin panel API responses show page metadata (name, ID, connected status) only. Token is never returned.
+
+### Anti-Pattern: React State for Access Token (localStorage)
+**Why bad:** XSS can read localStorage; if the admin panel is ever compromised, JWT access tokens leak.
+**Instead:** Access token in memory (React state/context). Refresh token in httpOnly cookie (browser blocks JS access). This is the standard pattern confirmed by 2024 sources.
+
+---
+
+## Scalability Notes
+
+This architecture is appropriate for the stated scale: a small number of tenants, a few Facebook Pages each, and the existing single-process deployment model.
+
+| Concern | At current scale (1–10 pages) | If scale grows (100+ pages) |
+|---------|-------------------------------|----------------------------|
+| SQLite concurrency | WAL mode sufficient | Consider PostgreSQL |
+| Bot page context cache | In-memory Map, TTL refresh | Fine as-is |
+| Admin API auth | JWT, no session DB | Fine as-is |
+| Token storage | SQLite + Fernet | Same pattern, different DB |
+| Vault → DB migration | One-time script per page | Fully DB-native, no migration |
+
+---
+
+## Sources
+
+- Existing codebase: `messenger-bot/src/index.ts`, `app/routers/content.py`, `app/config.py`, `requirements.txt`, `messenger-bot/package.json` (directly read)
+- Meta developer docs: [Access Token Guide](https://developers.facebook.com/docs/facebook-login/guides/access-tokens/), [Long-Lived Tokens](https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived/), [Webhooks for Pages](https://developers.facebook.com/docs/graph-api/webhooks/getting-started/webhooks-for-pages/) (fetched and read)
+- Facebook Page ID in webhook: confirmed via entry.id field in webhook payload structure (HIGH confidence, stable since Messenger Platform v1)
+- SQLAlchemy 2.0 + aiosqlite + FastAPI pattern: multiple 2024–2025 sources, consistent pattern
+- JWT auth pattern (access in memory, refresh in httpOnly cookie): multiple 2024 sources, confirmed best practice
+- better-sqlite3 vs aiosqlite: aiosqlite chosen because FastAPI backend is already Python; no reason to introduce a second DB connection from the Node.js bot
+- WAL mode for SQLite concurrency: SQLite official documentation (HIGH confidence)
+
+*Architecture research: 2026-05-27*
