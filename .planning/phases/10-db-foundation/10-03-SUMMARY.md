@@ -56,7 +56,7 @@ completed: 2026-05-27
 - **Duration:** 4 min
 - **Started:** 2026-05-27T07:13:23Z
 - **Completed:** 2026-05-27T07:17:27Z
-- **Tasks:** 1 of 2 completed (Task 2 is checkpoint:human-verify — awaiting human sign-off)
+- **Tasks:** 2 of 2 completed
 - **Files modified:** 2
 
 ## Accomplishments
@@ -70,8 +70,7 @@ completed: 2026-05-27
 Each task was committed atomically:
 
 1. **Task 1: Create scripts/init_db.py CLI runner and add SQLite sidecar patterns to .gitignore** - `0297579` (feat)
-
-**Plan metadata commit:** pending (after human-verify checkpoint resolves)
+2. **Task 2: Human verification sign-off** - checkpoint:human-verify — PASSED (user approved 2026-05-27)
 
 ## Files Created/Modified
 - `scripts/init_db.py` — CLI entry point: imports init_schema + settings, calls init_schema(settings.db_path), prints confirmation
@@ -101,28 +100,32 @@ Each task was committed atomically:
 ## Issues Encountered
 - Worktree was branched from an older commit (3b9d102) that predated Phase 10 work. Applied mandatory `git reset --hard` to base commit `0ea4d24` per worktree branch check protocol, making app/db.py and updated app/config.py available.
 
-## Checkpoint Status (Task 2 — Awaiting)
+## Checkpoint Status (Task 2 — PASSED)
 
-Task 2 is a `checkpoint:human-verify` gate. The automated portion of verification has already passed:
+Task 2 was a `checkpoint:human-verify` gate. Human sign-off received 2026-05-27.
+
+**Automated verification (pre-checkpoint):**
 - `python3 -m pytest tests/ -q` → 18 passed
 - `grep -rnE "from app.(db|crypto)" app/ | wc -l` → 0 (new modules are dormant in the live server)
 - `git status --porcelain` → no *.db files appear (correctly gitignored)
 
-**Human verification steps:**
-1. `python3 -m pytest tests/ -q` — expect all tests pass
-2. `python3 main.py` — uvicorn starts on port 8000 with no startup errors
-3. `curl -s http://localhost:8000/health` — same JSON shape as before Phase 10
-4. `curl -s http://localhost:8000/content/categories` — same categories list (or vault_loaded: false if no vault)
-5. `curl -s -X POST http://localhost:8000/content/reload` — same reload response
-6. `grep -rn "from app.db\|from app.crypto" app/` — expect zero matches
+**Human verification result:** PASSED — user confirmed all tests pass and API endpoints are unchanged.
 
 ## User Setup Required
 None — no external service configuration required.
 
 ## Next Phase Readiness
 - DB-01 first three criteria satisfied: schema (Plan 01), WAL+busy_timeout (Plan 01), Fernet round-trip (Plan 02), and this plan's CLI runner
-- Fourth criterion (no-regression) awaits human checkpoint sign-off
+- Fourth criterion (no-regression) satisfied — human checkpoint PASSED
 - Phase 11+ can import app.db and use init_schema() — the initialized DB file at settings.db_path will exist after `python3 scripts/init_db.py` is run at deploy time
+
+## Self-Check: PASSED
+
+- scripts/init_db.py: FOUND (commit 0297579)
+- .gitignore updated: FOUND (commit 0297579)
+- Task 1 commit 0297579: FOUND
+- Task 2 human sign-off: PASSED (user approved 2026-05-27)
+- 18 tests passing: CONFIRMED
 
 ---
 *Phase: 10-db-foundation*
