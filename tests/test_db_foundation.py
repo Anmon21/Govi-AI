@@ -1,5 +1,6 @@
 import sqlite3
 
+import pytest
 import app.config as config_module
 from cryptography.fernet import Fernet
 
@@ -44,3 +45,29 @@ def test_fernet_round_trip(monkeypatch):
     key = Fernet.generate_key().decode()
     monkeypatch.setattr(config_module.settings, "fernet_key", key)
     assert decrypt_token(encrypt_token("test_page_access_token")) == "test_page_access_token"
+
+
+def test_schema_idempotent(tmp_path):
+    """DB-01: calling init_schema twice does not raise."""
+    db = str(tmp_path / "test.db")
+    init_schema(db)
+    init_schema(db)  # must not raise
+
+
+def test_decrypt_token_invalid_ciphertext(monkeypatch):
+    """Decrypting a corrupted ciphertext raises ValueError, not InvalidToken."""
+    key = Fernet.generate_key().decode()
+    monkeypatch.setattr(config_module.settings, "fernet_key", key)
+    with pytest.raises(ValueError, match="decryption failed"):
+        decrypt_token("this-is-not-valid-ciphertext")
+
+
+def test_decrypt_token_wrong_key(monkeypatch):
+    """Decrypting with the wrong key raises ValueError."""
+    key1 = Fernet.generate_key().decode()
+    key2 = Fernet.generate_key().decode()
+    monkeypatch.setattr(config_module.settings, "fernet_key", key1)
+    ciphertext = encrypt_token("secret")
+    monkeypatch.setattr(config_module.settings, "fernet_key", key2)
+    with pytest.raises(ValueError, match="decryption failed"):
+        decrypt_token(ciphertext)
