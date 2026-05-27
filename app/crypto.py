@@ -13,4 +13,7 @@ def encrypt_token(plain: str) -> str:
 
 
 def decrypt_token(enc: str) -> str:
-    return _fernet().decrypt(enc.encode()).decode()
+    try:
+        return _fernet().decrypt(enc.encode()).decode()
+    except InvalidToken as exc:
+        raise ValueError("Token decryption failed: invalid ciphertext or wrong key") from exc
