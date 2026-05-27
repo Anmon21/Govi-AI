@@ -65,14 +65,21 @@
 
 ## Traceability
 
-| Requirement | Phase |
-|-------------|-------|
-| DB-01 | Phase 10 |
-| DB-02 | Phase 13 |
-| TENANT-01, TENANT-02, TENANT-03 | Phase 11–12 |
-| PAGE-01, PAGE-02, PAGE-03, PAGE-04 | Phase 12 |
-| CONTENT-01, CONTENT-02, CONTENT-03, CONTENT-04 | Phase 13, 15 |
-| BOT-01, BOT-02, BOT-03 | Phase 14 |
-| All admin panel UI | Phase 15 |
-
-*Traceability filled by roadmapper*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DB-01 | Phase 10 | Pending |
+| TENANT-01 | Phase 11 | Pending |
+| TENANT-02 | Phase 11 | Pending |
+| TENANT-03 | Phase 11 | Pending |
+| PAGE-01 | Phase 12 | Pending |
+| PAGE-02 | Phase 12 | Pending |
+| PAGE-03 | Phase 12 | Pending |
+| PAGE-04 | Phase 12 | Pending |
+| CONTENT-01 | Phase 13 | Pending |
+| CONTENT-02 | Phase 13 | Pending |
+| CONTENT-03 | Phase 13 | Pending |
+| CONTENT-04 | Phase 13 | Pending |
+| DB-02 | Phase 13 | Pending |
+| BOT-01 | Phase 14 | Pending |
+| BOT-02 | Phase 14 | Pending |
+| BOT-03 | Phase 14 | Pending |

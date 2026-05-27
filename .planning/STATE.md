@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Admin Panel & Multi-Page Support
 status: planning
-last_updated: "2026-05-27T02:14:00.339Z"
+last_updated: "2026-05-27T00:00:00.000Z"
 last_activity: 2026-05-27
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,27 +17,31 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-15)
+See: .planning/PROJECT.md (updated 2026-05-27)
 
 **Core value:** Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates
-**Current focus:** Phase 09 — user-memory-personalization
+**Current focus:** Phase 10 — DB Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 10 — DB Foundation
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-27 — Milestone v1.2 started
+Status: Planning
+Last activity: 2026-05-27 — v1.2 roadmap created (Phases 10–15)
+
+```
+v1.2 Progress: [----------] 0% (0/6 phases)
+```
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed (v1.1): 4
 - Average duration: —
 - Total execution time: —
 
-**By Phase:** (populated after roadmap is created)
+**By Phase:** (populated after plan completion)
 
 *Updated after each plan completion*
 
@@ -46,14 +50,20 @@ Last activity: 2026-05-27 — Milestone v1.2 started
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
-Carried forward from v1.0:
+Carried forward from v1.0/v1.1:
 
 - [Init]: Rule-based menus over AI — deterministic, easier to manage
-- [Init]: Obsidian vault as content store — no custom admin UI needed
+- [Init]: Obsidian vault as content store — no custom admin UI needed (superseded in v1.2)
 - [Init]: Keep existing Node.js + FastAPI two-service split unchanged
 - [v1.1]: In-memory user memory (Map per PSID) — SQLite deferred; resets on restart is acceptable for v1.1
 - [v1.1]: "Was this helpful?" No → escalation (not re-show options)
 - [v1.1]: "Read more" sends full answer as follow-up message (not external URL)
+
+### Open Questions (from research)
+
+- **Graph API version:** Research references v21.0 and v25.0. Confirm current stable at Phase 12 planning time.
+- **Admin panel hosting:** Serve static build from FastAPI StaticFiles (simpler, one URL, no CORS) or standalone process (cleaner separation)? Resolve before Phase 15.
+- **Unused AI router:** `app/routers/ai.py` appears unused after v1.0 rule-based rewrite. Consider removal in Phase 10 to reduce attack surface.
 
 ### Pending Todos
 
@@ -61,12 +71,13 @@ None.
 
 ### Blockers/Concerns
 
-- [Phase 1]: Webhook signature fix requires `express.raw()` before `express.json()` — middleware order matters
-- [Phase 4]: Admin PSID requires admin to have messaged the Page at least once — document as required setup step
+- [Phase 12]: Facebook App Review for `pages_messaging` is an external dependency — submit during Phase 12 and treat as a launch blocker on a clock you don't control
+- [Phase 14]: `PAGE_ACCESS_TOKEN` global must be completely removed from all ~15 call sites; verify by grep after phase completes
+- [Phase 13]: Content migration (DB-02) uses expand-then-contract pattern — parallel endpoints during cutover to avoid in-flight content breakage
 
 ## Deferred Items
 
-Carried forward from v1.0 (all require deployed Facebook bot):
+Carried forward from v1.0/v1.1 (all require deployed Facebook bot):
 
 | Category | Item | Status |
 |----------|------|--------|
@@ -78,6 +89,6 @@ Carried forward from v1.0 (all require deployed Facebook bot):
 
 ## Session Continuity
 
-Last session: 2026-05-20T08:01:28.350Z
-Stopped at: Phase 9 UI-SPEC approved
-Resume file: .planning/phases/09-user-memory-personalization/09-UI-SPEC.md
+Last session: 2026-05-27
+Stopped at: v1.2 roadmap created
+Resume file: .planning/ROADMAP.md
