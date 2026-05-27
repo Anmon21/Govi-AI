@@ -468,7 +468,7 @@ d = dict(row)  # {'id': 1, 'email': 'admin@example.com'}
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Where does `govi.db` live in production?**
    - What we know: `DB_PATH` defaults to `"govi.db"` (relative to cwd, i.e., project root)

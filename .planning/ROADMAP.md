@@ -106,8 +106,13 @@ Plans:
   4. The existing FastAPI content endpoints return the same responses as before this phase (no regression)
 **Plans**: 3 plans
 Plans:
+**Wave 1**
 - [ ] 10-01-PLAN.md — Wave 0 test scaffold + app/db.py (get_connection + init_schema for tenants/pages/page_configs/qa_items with WAL, busy_timeout, FKs)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 10-02-PLAN.md — Settings db_path/fernet_key + cryptography dependency + .env.example + app/crypto.py Fernet helpers + test_fernet_round_trip
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 10-03-PLAN.md — scripts/init_db.py CLI runner + .gitignore SQLite sidecars + human no-regression checkpoint on /health and /content endpoints
 
 ### Phase 11: Auth & Tenant Management API
