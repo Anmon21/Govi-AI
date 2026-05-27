@@ -107,7 +107,7 @@ Plans:
 **Plans**: 3 plans
 Plans:
 **Wave 1**
-- [ ] 10-01-PLAN.md — Wave 0 test scaffold + app/db.py (get_connection + init_schema for tenants/pages/page_configs/qa_items with WAL, busy_timeout, FKs)
+- [x] 10-01-PLAN.md — Wave 0 test scaffold + app/db.py (get_connection + init_schema for tenants/pages/page_configs/qa_items with WAL, busy_timeout, FKs)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 10-02-PLAN.md — Settings db_path/fernet_key + cryptography dependency + .env.example + app/crypto.py Fernet helpers + test_fernet_round_trip
@@ -189,7 +189,7 @@ Plans:
 | 7. Helpfulness Feedback | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 8. Answer Truncation | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 9. User Memory & Personalization | v1.1 | 1/1 | Complete | 2026-05-20 |
-| 10. DB Foundation | v1.2 | 0/3 | Planning | - |
+| 10. DB Foundation | v1.2 | 1/3 | In Progress|  |
 | 11. Auth & Tenant Management API | v1.2 | 0/? | Not started | - |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 0/? | Not started | - |
 | 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
