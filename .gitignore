@@ -12,3 +12,6 @@ build/
 .DS_Store
 node_modules/
 messenger-bot/node_modules/
+*.db
+*.db-wal
+*.db-shm
