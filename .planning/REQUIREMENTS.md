@@ -30,7 +30,7 @@
 
 ### Database Foundation
 
-- [ ] **DB-01**: System stores all tenant, Page, and content data in a SQLite database (WAL mode, Fernet-encrypted tokens)
+- [x] **DB-01**: System stores all tenant, Page, and content data in a SQLite database (WAL mode, Fernet-encrypted tokens)
 - [ ] **DB-02**: Existing Obsidian vault Q&A content is migrated to the database via a one-time seed script
 
 ### Bot Architecture
@@ -67,7 +67,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | Phase 10 | Pending |
+| DB-01 | Phase 10 | Complete |
 | TENANT-01 | Phase 11 | Pending |
 | TENANT-02 | Phase 11 | Pending |
 | TENANT-03 | Phase 11 | Pending |
