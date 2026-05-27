@@ -10,24 +10,22 @@ A rule-based Facebook Messenger chatbot for Govi (e-commerce/retail) that guides
 
 Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates.
 
-## Current Milestone: v1.1 UX Polish & Hardening
+## Current Milestone: v1.2 Admin Panel & Multi-Page Support
 
-**Goal:** Fix four v1.0 tech debt bugs and add three UX improvements for a polished, production-ready bot.
+**Goal:** A web-based admin panel that lets you add client tenants, each connecting their Facebook Page via OAuth and customizing their bot's content end-to-end — no Obsidian vault, no code changes, no manual involvement.
 
 **Target features:**
-- Fix CR-01: Postback handler dispatches persistent menu taps (MENU_PRODUCT_HELP / MENU_MAIN)
-- Fix CR-02: Webhook async loop wrapped in try/catch to prevent unhandled rejections
-- Fix WR-01: VERIFY_TOKEN validated at startup (fail-fast if missing)
-- Fix WR-05: Non-Axios error branches sanitize logs to prevent token leak
-- "Was this helpful?" quick reply after every answer; No → escalation flow
-- Answer truncation at ~200 chars + "Read more" quick reply sends full answer as follow-up
-- In-memory returning user memory — greet by name on repeat visits (per PSID Map, resets on restart)
+- Tenant management: you add clients (email + password), they see only their own Pages
+- Facebook OAuth: clients connect Pages via "Connect with Facebook" — tokens stored in DB automatically
+- Per-page content editor: welcome text, menu labels, Q&A categories + answers, escalation settings (admin PSID, handoff message)
+- DB-backed content: replaces Obsidian vault entirely; bot reads config from DB by Page ID
+- Bot becomes page-aware: handles webhooks from multiple Pages using the right token + content per Page
 
 ## Current State
 
-**Version:** v1.1 (milestone complete — awaiting production deployment)
-**Previous:** v1.0 shipped 2026-05-15 — feature-complete
-**Status:** Phase 09 complete — personalized greetings via in-memory name cache (UX-06, UX-07). All v1.1 phases done.
+**Version:** v1.2 (in progress)
+**Previous:** v1.1 shipped 2026-05-20 — UX polish & hardening complete
+**Status:** Milestone v1.2 started — defining requirements for Admin Panel & Multi-Page Support
 
 **Codebase:**
 - `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~420 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator, DEBT-01–04 fixes, personalized greetings
@@ -59,11 +57,22 @@ Customers can get instant product answers and reach a human through Messenger �
 - ✓ Fix DEBT-03: VERIFY_TOKEN fail-fast guard at startup (process.exit(1) if unset) — Phase 06
 - ✓ Fix DEBT-04: All 7 non-Axios error branches sanitized — no token leak via log objects — Phase 06
 
-### Active (v1.1)
+### Validated (v1.1, Phases 07–09)
 
-- [ ] "Was this helpful?" quick reply after answers — No → escalation
-- [ ] Answer truncation (~200 chars) + "Read more" quick reply → full answer as follow-up
-- [ ] In-memory returning user memory — greet by name (per PSID Map)
+- ✓ "Was this helpful?" quick reply after answers — No → escalation (UX-01–03) — Phase 07
+- ✓ Answer truncation (~200 chars) + "Read more" quick reply → full answer as follow-up (UX-04–05) — Phase 08
+- ✓ In-memory returning user memory — greet by name (per PSID Map) (UX-06–07) — Phase 09
+
+### Active (v1.2)
+
+- [ ] Tenant management — admin creates client accounts; clients see only their own Pages
+- [ ] Facebook OAuth page connection — clients connect Pages via "Connect with Facebook"
+- [ ] Per-page welcome text customization
+- [ ] Per-page menu label & structure editor
+- [ ] Per-page Q&A content editor (replaces Obsidian vault)
+- [ ] Per-page escalation settings editor (admin PSID, handoff message)
+- [ ] DB-backed content store — bot reads config from DB by Page ID
+- [ ] Multi-page bot — handles webhooks from multiple Pages with per-Page token + config
 - [ ] Live Messenger UAT — 7 human-only scenarios pending production deployment
 
 ### Out of Scope (v1.x)
@@ -125,4 +134,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-20 — Phase 09 complete, v1.1 milestone done*
+*Last updated: 2026-05-27 — Milestone v1.2 started: Admin Panel & Multi-Page Support*
