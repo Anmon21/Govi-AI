@@ -1,6 +1,10 @@
 import sqlite3
 
+import app.config as config_module
+from cryptography.fernet import Fernet
+
 from app.db import get_connection, init_schema
+from app.crypto import encrypt_token, decrypt_token
 
 
 def test_schema_creates_all_tables(tmp_path):
@@ -33,3 +37,10 @@ def test_busy_timeout(tmp_path):
     result = conn.execute("PRAGMA busy_timeout").fetchone()
     assert result[0] == 5000
     conn.close()
+
+
+def test_fernet_round_trip(monkeypatch):
+    """DB-01: encrypt_token/decrypt_token round-trip returns original value."""
+    key = Fernet.generate_key().decode()
+    monkeypatch.setattr(config_module.settings, "fernet_key", key)
+    assert decrypt_token(encrypt_token("test_page_access_token")) == "test_page_access_token"
