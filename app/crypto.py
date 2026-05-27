@@ -5,6 +5,8 @@ from app.config import settings
 
 # _fernet — key loaded from env-backed settings; never persisted to DB or logged
 def _fernet() -> Fernet:
+    if not settings.fernet_key:
+        raise RuntimeError("FERNET_KEY is not configured. Set it in .env.")
     return Fernet(settings.fernet_key.encode())
 
 
