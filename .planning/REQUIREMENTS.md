@@ -1,69 +1,78 @@
-# Requirements: Govi Facebook Messenger Customer Support Bot — v1.1
+# Requirements — v1.2 Admin Panel & Multi-Page Support
 
-**Defined:** 2026-05-15
-**Milestone:** v1.1 UX Polish & Hardening
-**Core Value:** Customers can get instant product answers and reach a human through Messenger — 24/7, without developer involvement in content updates
+**Milestone:** v1.2
+**Status:** Draft
+**Last updated:** 2026-05-27
 
-## v1.1 Requirements
+---
 
-### Bug Fixes
+## v1.2 Requirements
 
-- [ ] **DEBT-01**: User persistent menu taps (MENU_PRODUCT_HELP, MENU_MAIN) are handled correctly by the postback dispatcher
-- [ ] **DEBT-02**: Unhandled promise rejections from the webhook processing loop are caught and logged without crashing the bot
-- [ ] **DEBT-03**: Bot fails at startup with a clear error message if VERIFY_TOKEN is not set in the environment
-- [ ] **DEBT-04**: Error logging for non-Axios errors omits raw error objects to prevent accidental token leak
+### Tenant Management
 
-### UX Enhancements
+- [ ] **TENANT-01**: Super-admin can create a client account (email + password) via the admin panel
+- [ ] **TENANT-02**: Super-admin can view a list of all client accounts and their connected Pages
+- [ ] **TENANT-03**: Super-admin can delete or deactivate a client account (disconnects their Pages)
 
-- [ ] **UX-01**: User sees "Was this helpful?" quick reply (Yes / No) after every answer
-- [ ] **UX-02**: User tapping "Yes" receives a short acknowledgment message and is shown the main menu
-- [ ] **UX-03**: User tapping "No" is routed to the escalation flow
-- [ ] **UX-04**: Answers longer than ~200 characters are truncated with "..." and a "Read more" quick reply
-- [ ] **UX-05**: User tapping "Read more" receives the full answer text as a follow-up message
-- [ ] **UX-06**: Bot fetches user's first name via Graph API on first interaction and stores it per PSID in an in-memory Map
-- [ ] **UX-07**: Returning user is greeted by name in the welcome / Get Started message
+### Facebook Page Connection
 
-## Future Requirements
+- [ ] **PAGE-01**: Client can connect a Facebook Page via OAuth ("Connect with Facebook" button) — full 3-step token exchange with webhook subscription
+- [ ] **PAGE-02**: Client can view a list of their connected Pages and connection status
+- [ ] **PAGE-03**: Client can disconnect a Page (removes stored token and webhook subscription)
+- [ ] **PAGE-04**: Client can see a token health indicator per Page and trigger reconnect if the token is revoked
 
-### v2+
+### Per-Page Content Editing
 
-- **PERS-01**: Persistent user memory across bot restarts (SQLite or equivalent)
-- **UX-08**: "Was this helpful?" analytics — track Yes/No counts per question
-- **NOTIF-01**: Proactive outreach — admin can message all opted-in users
+- [ ] **CONTENT-01**: Client can edit the welcome/greeting text shown to users on Get Started for their Page
+- [ ] **CONTENT-02**: Client can edit the persistent menu labels and structure for their Page
+- [ ] **CONTENT-03**: Client can create, edit, and delete Q&A categories and answers for their Page (replaces Obsidian vault)
+- [ ] **CONTENT-04**: Client can edit escalation settings for their Page (admin PSID and handoff message)
 
-## Out of Scope
+### Database Foundation
 
-| Feature | Reason |
-|---------|--------|
-| Persistent user memory (SQLite) | In-memory sufficient for v1.1; restart clears state, acceptable |
-| Order tracking / order status | No store backend connected |
-| AI-powered free-text responses | Rule-based menus only |
-| Shopify / WooCommerce integration | Standalone system |
-| Custom admin web UI | Obsidian vault is the content management interface |
-| Multi-language support | English only |
-| Answer length truncation linking to external URL | Vault entries don't have url fields; follow-up message is simpler |
+- [ ] **DB-01**: System stores all tenant, Page, and content data in a SQLite database (WAL mode, Fernet-encrypted tokens)
+- [ ] **DB-02**: Existing Obsidian vault Q&A content is migrated to the database via a one-time seed script
+
+### Bot Architecture
+
+- [ ] **BOT-01**: The bot routes each incoming webhook event to the correct Facebook Page using the Page ID from the event payload, and fetches the matching token + config from the database
+- [ ] **BOT-02**: The bot reads all Q&A content from the database; the Obsidian vault dependency is removed
+- [ ] **BOT-03**: The bot's in-memory caches (user name, session state) are scoped per Page ID so multiple Pages do not share state
+
+---
+
+## Future Requirements (deferred)
+
+- Bulk CSV import of Q&A content — deferred to v1.3
+- Analytics dashboard (message volume, escalation rate) — deferred to v1.3
+- Automated token health-check background job — deferred to v1.3
+- Content change preview (static render of menu tree and answer text) — deferred to v1.3
+- Audit log (who changed what per Page) — deferred to v1.3
+- Self-service client registration with invitation emails — deferred (out of scope for admin-managed model)
+
+---
+
+## Out of Scope (v1.x)
+
+- Multi-level user roles (e.g. Page editors vs. Page owners within a tenant) — role model is super-admin + client only
+- White-labeling the admin panel — single-brand tool
+- Drag-and-drop flow builder — Messenger tree limits make it not worth the implementation cost
+- Conversation inbox / live chat — separate product category
+- Broadcast messaging — not a Messenger bot concern
+- Rich text / HTML in Q&A answers — Messenger only supports plain text
+
+---
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| DEBT-01 | Phase 6 | Pending |
-| DEBT-02 | Phase 6 | Pending |
-| DEBT-03 | Phase 6 | Pending |
-| DEBT-04 | Phase 6 | Pending |
-| UX-01 | Phase 7 | Pending |
-| UX-02 | Phase 7 | Pending |
-| UX-03 | Phase 7 | Pending |
-| UX-04 | Phase 8 | Pending |
-| UX-05 | Phase 8 | Pending |
-| UX-06 | Phase 9 | Pending |
-| UX-07 | Phase 9 | Pending |
+| Requirement | Phase |
+|-------------|-------|
+| DB-01 | Phase 10 |
+| DB-02 | Phase 13 |
+| TENANT-01, TENANT-02, TENANT-03 | Phase 11–12 |
+| PAGE-01, PAGE-02, PAGE-03, PAGE-04 | Phase 12 |
+| CONTENT-01, CONTENT-02, CONTENT-03, CONTENT-04 | Phase 13, 15 |
+| BOT-01, BOT-02, BOT-03 | Phase 14 |
+| All admin panel UI | Phase 15 |
 
-**Coverage:**
-- v1.1 requirements: 11 total
-- Mapped to phases: 11 ✓
-- Unmapped: 0 ✓
-
----
-*Requirements defined: 2026-05-15*
-*Last updated: 2026-05-15 — traceability table populated after roadmap creation*
+*Traceability filled by roadmapper*
