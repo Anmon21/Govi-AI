@@ -3,12 +3,27 @@ import app.config as config_module
 from fastapi.testclient import TestClient
 from app.main import app
 from app.db import init_schema, get_connection
-from app.auth import create_access_token
+from app.auth import create_access_token, verify_token
 
 
 def test_login_success(db_client):
     """SC-1: login with valid credentials returns a JWT."""
-    pytest.skip("Wave 0 stub — implemented in plan 03")
+    client = db_client.client
+    email = db_client.super_admin_email
+    password = db_client.super_admin_password
+    sa_id = db_client.super_admin_id
+
+    resp = client.post("/auth/login", json={"email": email, "password": password})
+    assert resp.status_code == 200
+
+    body = resp.json()
+    assert body["token_type"] == "bearer"
+    assert isinstance(body["access_token"], str)
+    assert body["access_token"].startswith("eyJ")
+
+    decoded = verify_token(body["access_token"])
+    assert decoded["sub"] == str(sa_id)
+    assert decoded["role"] == "super_admin"
 
 
 def test_login_invalid(db_client):
