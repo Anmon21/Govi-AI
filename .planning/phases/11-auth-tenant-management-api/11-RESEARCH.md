@@ -517,7 +517,7 @@ async def login(request: LoginRequest):
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`app/routers/health.py` references `content._vault`**
    - What we know: `health.py` imports `app.routers.content` for vault stats — tightly coupled to vault content loading.
