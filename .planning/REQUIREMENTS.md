@@ -10,9 +10,9 @@
 
 ### Tenant Management
 
-- [ ] **TENANT-01**: Super-admin can create a client account (email + password) via the admin panel
-- [ ] **TENANT-02**: Super-admin can view a list of all client accounts and their connected Pages
-- [ ] **TENANT-03**: Super-admin can delete or deactivate a client account (disconnects their Pages)
+- [x] **TENANT-01**: Super-admin can create a client account (email + password) via the admin panel
+- [x] **TENANT-02**: Super-admin can view a list of all client accounts and their connected Pages
+- [x] **TENANT-03**: Super-admin can delete or deactivate a client account (disconnects their Pages)
 
 ### Facebook Page Connection
 
@@ -68,9 +68,9 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DB-01 | Phase 10 | Complete |
-| TENANT-01 | Phase 11 | Pending |
-| TENANT-02 | Phase 11 | Pending |
-| TENANT-03 | Phase 11 | Pending |
+| TENANT-01 | Phase 11 | Complete |
+| TENANT-02 | Phase 11 | Complete |
+| TENANT-03 | Phase 11 | Complete |
 | PAGE-01 | Phase 12 | Pending |
 | PAGE-02 | Phase 12 | Pending |
 | PAGE-03 | Phase 12 | Pending |

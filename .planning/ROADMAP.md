@@ -190,7 +190,7 @@ Plans:
 | 8. Answer Truncation | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 9. User Memory & Personalization | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
-| 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete   | 2026-05-28 |
+| 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete    | 2026-05-28 |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 0/? | Not started | - |
 | 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |

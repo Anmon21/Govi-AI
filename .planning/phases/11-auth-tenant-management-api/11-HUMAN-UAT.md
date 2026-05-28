@@ -1,5 +1,5 @@
 ---
-status: partial
+status: resolved
 phase: 11-auth-tenant-management-api
 source: [11-VERIFICATION.md]
 started: 2026-05-28T02:40:00Z
