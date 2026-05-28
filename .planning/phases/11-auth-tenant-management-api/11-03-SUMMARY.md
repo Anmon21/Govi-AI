@@ -2,7 +2,7 @@
 phase: 11-auth-tenant-management-api
 plan: 03
 subsystem: auth-tests
-status: partial — awaiting human checkpoint (Task 2)
+status: complete
 tags: [jwt, bcrypt, fastapi, sqlite, testing, pytest]
 
 # Dependency graph
@@ -42,19 +42,19 @@ completed: 2026-05-28
 
 # Phase 11 Plan 03: Auth Test Implementation Summary
 
-**9 fully implemented auth tests covering SC-1..SC-5 and TENANT-01..03; 37 total tests passing; awaiting human JWT checkpoint**
+**9 fully implemented auth tests covering SC-1..SC-5 and TENANT-01..03; 37 total tests passing; human JWT checkpoint approved**
 
 ## Status
 
 **Task 1: COMPLETE** — All 8 test stubs implemented; 9 auth tests passing; full suite at 37 passed.
 
-**Task 2: AWAITING** — Human checkpoint: decode a real /auth/login JWT at jwt.io and confirm sub/role/exp claims.
+**Task 2: COMPLETE** — Human checkpoint approved. JWT decoded at jwt.io; all claims confirmed correct (sub = "1", role = "super_admin", exp = Unix timestamp ~7 days from issue date, algorithm = HS256).
 
 ## Performance
 
 - **Duration:** ~10 min
 - **Started:** 2026-05-28
-- **Tasks:** 1/2 complete (Task 2 is human-verify checkpoint)
+- **Tasks:** 2/2 complete
 - **Files modified:** 2
 
 ## Accomplishments
@@ -111,15 +111,20 @@ completed: 2026-05-28
 
 ## Human Checkpoint (Task 2)
 
-**Status:** AWAITING
+**Status:** APPROVED — 2026-05-28
 
-The only remaining validation is a one-shot manual inspection of a real JWT token at jwt.io to confirm:
-- Header: `{"alg":"HS256","typ":"JWT"}`
-- Payload `sub`: integer as a quoted string (e.g. `"1"`)
-- Payload `role`: exactly `"super_admin"`
-- Payload `exp`: Unix timestamp ~7 days from now
+A real `/auth/login` JWT was decoded at jwt.io. All claims were confirmed correct:
 
-See Task 2 in 11-03-PLAN.md for exact verification steps.
+| Claim | Expected | Observed | Result |
+|-------|----------|----------|--------|
+| Header alg | HS256 | HS256 | PASS |
+| Header typ | JWT | JWT | PASS |
+| sub | tenant ID as quoted string | "1" | PASS |
+| role | "super_admin" | "super_admin" | PASS |
+| exp | Unix timestamp ~7 days from now | ~2026-06-04 | PASS |
+| Structure | three dot-separated segments | header.payload.signature | PASS |
+
+Human resume-signal: **"approved"**
 
 ## Known Stubs
 
@@ -127,12 +132,11 @@ None — all 8 stubs have been implemented. `grep -c "pytest.skip" tests/test_au
 
 ## Phase-Gate Readiness
 
-**Condition:** Phase 11 will be ready for `/gsd-verify-work` once the human checkpoint (Task 2) is approved.
+**Phase 11 is ready for `/gsd-verify-work`.**
 
-**Automated gate:** 37 tests passing, 0 skipped, 0 failed. All SC and TENANT requirements have behavioral test coverage.
-
-**Manual gate:** Human JWT inspection at jwt.io (Task 2) — awaiting approval.
+- **Automated gate:** 37 tests passing, 0 skipped, 0 failed. All SC and TENANT requirements have behavioral test coverage.
+- **Manual gate:** Human JWT inspection at jwt.io (Task 2) — APPROVED 2026-05-28.
 
 ---
 *Phase: 11-auth-tenant-management-api*
-*Completed: 2026-05-28 (Task 1 only; Task 2 pending human checkpoint)*
+*Completed: 2026-05-28*
