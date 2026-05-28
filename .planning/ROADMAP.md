@@ -136,7 +136,13 @@ Plans:
   2. The client can view all their connected Pages with a status badge (active / token revoked) via GET /pages
   3. The client can disconnect a Page via DELETE /pages/{id}; the stored token is deleted and the webhook subscription is removed from Facebook
   4. A Page whose token has been revoked shows a "Reconnect" indicator and the client can re-initiate OAuth to restore it
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+**Wave 1**
+- [ ] 12-01-PLAN.md — Settings/env additions, app/fb_client.py Graph API helpers (v25.0), GET /auth/facebook/start + GET /auth/facebook/callback with CSRF state JWT, atomic Fernet token store + webhook subscribe with rollback, 6 PAGE-01 tests (PAGE-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 12-02-PLAN.md — GET /pages with lazy debug_token health, DELETE /pages/{id} with best-effort unsubscribe, GET /pages/{id}/health, 6 tests covering list/revoked/isolation/disconnect/404/health (PAGE-02, PAGE-03, PAGE-04)
 
 ### Phase 13: Page Config, Q&A API + Content Migration
 **Goal**: All bot content (welcome text, menu, Q&A, escalation settings) is served from the database per Page ID; the existing /content HTTP contract is preserved; the Obsidian vault is retired
@@ -191,11 +197,11 @@ Plans:
 | 9. User Memory & Personalization | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
 | 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete    | 2026-05-28 |
-| 12. Page Connection API + Facebook OAuth | v1.2 | 0/? | Not started | - |
+| 12. Page Connection API + Facebook OAuth | v1.2 | 0/2 | Planned | - |
 | 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |
 | 15. Admin Panel UI | v1.2 | 0/? | Not started | - |
 
 ---
 
-*Last updated: 2026-05-27 — v1.2 roadmap created (Phases 10–15)*
+*Last updated: 2026-05-28 — Phase 12 planned (2 plans, 2 waves)*
