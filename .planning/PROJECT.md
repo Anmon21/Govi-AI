@@ -25,7 +25,7 @@ Customers can get instant product answers and reach a human through Messenger �
 
 **Version:** v1.2 (in progress)
 **Previous:** v1.1 shipped 2026-05-20 — UX polish & hardening complete
-**Status:** Phase 10 complete — SQLite DB foundation, WAL mode, Fernet encryption in place. Next: Phase 11 (Auth & Tenant Management API)
+**Status:** Phase 11 complete — JWT auth, tenant management API, and full test coverage (37 tests green). Next: Phase 12 (Page Connection API + Facebook OAuth)
 
 **Codebase:**
 - `messenger-bot/src/index.ts` — Node.js/TypeScript bot (~420 LOC): webhook handler, menu routing, Q&A flow, escalation, typing indicator, DEBT-01–04 fixes, personalized greetings
