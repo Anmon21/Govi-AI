@@ -34,7 +34,7 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
 ### v1.2 Admin Panel & Multi-Page Support
 
 - [x] **Phase 10: DB Foundation** - SQLite schema, WAL mode, Fernet encryption setup — the data layer every subsequent phase depends on (completed 2026-05-27)
-- [ ] **Phase 11: Auth & Tenant Management API** - FastAPI login, JWT sessions, and super-admin CRUD for client accounts
+- [x] **Phase 11: Auth & Tenant Management API** - FastAPI login, JWT sessions, and super-admin CRUD for client accounts (completed 2026-05-28)
 - [ ] **Phase 12: Page Connection API + Facebook OAuth** - Clients connect Facebook Pages via OAuth with atomic webhook subscription; App Review submitted
 - [ ] **Phase 13: Page Config, Q&A API + Content Migration** - DB-backed content endpoints that preserve the existing HTTP contract; Obsidian vault retired via seed script
 - [ ] **Phase 14: Bot Multi-Page Routing** - Bot reads token + config per Page ID from FastAPI; PAGE_ACCESS_TOKEN global removed; per-page state isolation
@@ -190,7 +190,7 @@ Plans:
 | 8. Answer Truncation | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 9. User Memory & Personalization | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
-| 11. Auth & Tenant Management API | v1.2 | 2/3 | In Progress|  |
+| 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete   | 2026-05-28 |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 0/? | Not started | - |
 | 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |
