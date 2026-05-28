@@ -19,8 +19,9 @@ def init_schema(db_path: str) -> None:
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 email         TEXT    NOT NULL UNIQUE,
                 password_hash TEXT    NOT NULL,
-                is_active     INTEGER NOT NULL DEFAULT 1,
-                created_at    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+                is_active      INTEGER NOT NULL DEFAULT 1,
+                is_super_admin INTEGER NOT NULL DEFAULT 0,
+                created_at     TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
 
             CREATE TABLE IF NOT EXISTS pages (
