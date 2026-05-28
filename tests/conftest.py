@@ -59,4 +59,5 @@ def db_client(tmp_path, monkeypatch):
             super_admin_id=super_admin_id,
             super_admin_email="admin@test.local",
             super_admin_password=super_admin_password,
+            db_path=db_path,
         )
