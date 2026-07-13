@@ -1,19 +1,34 @@
 import secrets
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 from urllib.parse import urlencode
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from app import fb_client
 from app.auth import get_current_tenant
 from app.config import settings
-from app.crypto import encrypt_token
+from app.crypto import encrypt_token, decrypt_token
 from app.db import get_connection
 
 
 router = APIRouter(tags=["pages"])
+
+
+class PageResponse(BaseModel):
+    id: int
+    page_fb_id: str
+    page_name: str
+    status: Literal["active", "revoked"]
+    created_at: str
+
+
+class HealthResponse(BaseModel):
+    is_valid: bool
+    expires_at: int | None
 
 
 def create_oauth_state(tenant_id: str) -> str:
@@ -107,3 +122,120 @@ async def facebook_oauth_callback(code: str, state: str) -> dict:
         raise HTTPException(status_code=400, detail="No Facebook Pages found for this account")
     count = _store_pages_and_subscribe(pages_data, int(tenant_id_str))
     return {"pages_connected": count}
+
+
+@router.get("/pages", response_model=list[PageResponse])
+async def list_pages(current: dict = Depends(get_current_tenant)) -> list[PageResponse]:
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, page_fb_id, page_name, access_token_enc, created_at "
+            "FROM pages WHERE tenant_id = ? AND is_active = 1 ORDER BY id ASC",
+            (tenant_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    result: list[PageResponse] = []
+    for r in rows:
+        enc = r["access_token_enc"]
+        if enc:
+            try:
+                page_token = decrypt_token(enc)
+            except ValueError:
+                page_token = None
+        else:
+            page_token = None
+        is_valid = fb_client.check_token_health(page_token) if page_token else False
+        result.append(
+            PageResponse(
+                id=r["id"],
+                page_fb_id=r["page_fb_id"],
+                page_name=r["page_name"],
+                status="active" if is_valid else "revoked",
+                created_at=r["created_at"],
+            )
+        )
+    return result
+
+
+@router.delete("/pages/{page_id}", status_code=200)
+async def disconnect_page(
+    page_id: int, current: dict = Depends(get_current_tenant)
+) -> dict:
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        row = conn.execute(
+            "SELECT id, page_fb_id, access_token_enc FROM pages "
+            "WHERE id = ? AND tenant_id = ? AND is_active = 1",
+            (page_id, tenant_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        enc = row["access_token_enc"]
+        page_token = None
+        if enc:
+            try:
+                page_token = decrypt_token(enc)
+            except ValueError:
+                page_token = None
+        if page_token:
+            fb_client.unsubscribe_page_webhook(row["page_fb_id"], page_token)
+
+        conn.execute(
+            "UPDATE pages SET is_active = 0 WHERE id = ? AND tenant_id = ?",
+            (page_id, tenant_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"detail": f"Page {page_id} disconnected"}
+
+
+@router.get("/pages/{page_id}/health", response_model=HealthResponse)
+async def page_health(
+    page_id: int, current: dict = Depends(get_current_tenant)
+) -> HealthResponse:
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        row = conn.execute(
+            "SELECT access_token_enc FROM pages "
+            "WHERE id = ? AND tenant_id = ? AND is_active = 1",
+            (page_id, tenant_id),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+    enc = row["access_token_enc"]
+    if not enc:
+        return HealthResponse(is_valid=False, expires_at=None)
+    try:
+        page_token = decrypt_token(enc)
+    except ValueError:
+        return HealthResponse(is_valid=False, expires_at=None)
+
+    app_token = f"{settings.fb_app_id}|{settings.fb_app_secret}"
+    try:
+        resp = fb_client.httpx.get(
+            fb_client.GRAPH_BASE + "/debug_token",
+            params={"input_token": page_token, "access_token": app_token},
+        )
+        resp.raise_for_status()
+        data = resp.json().get("data", {})
+    except Exception:
+        return HealthResponse(is_valid=False, expires_at=None)
+
+    is_valid = bool(data.get("is_valid", False))
+    expires_raw = data.get("expires_at")
+    if isinstance(expires_raw, (int, float)) and expires_raw != 0:
+        expires_at = int(expires_raw)
+    else:
+        expires_at = None
+    return HealthResponse(is_valid=is_valid, expires_at=expires_at)
