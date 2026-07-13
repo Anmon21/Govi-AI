@@ -6,7 +6,7 @@ import jwt
 import pytest
 
 from app.config import settings
-from app.crypto import decrypt_token
+from app.crypto import decrypt_token, encrypt_token
 from app.db import get_connection
 
 from tests.test_auth import _auth_headers, _create_client, _login
@@ -37,6 +37,22 @@ def _make_client_token(db_client) -> tuple[int, str]:
     client_id = created["id"]
     client_token = _login(client, "page-client@test.local", "page-pass")
     return client_id, client_token
+
+
+def _seed_page(db_path, tenant_id, page_fb_id, page_name, page_token) -> int:
+    """Insert an active page row for tenant_id with an encrypted token; return lastrowid."""
+    conn = get_connection(db_path)
+    try:
+        cur = conn.execute(
+            "INSERT INTO pages (tenant_id, page_fb_id, page_name, access_token_enc, is_active) "
+            "VALUES (?, ?, ?, ?, 1)",
+            (tenant_id, page_fb_id, page_name, encrypt_token(page_token)),
+        )
+        page_id = cur.lastrowid
+        conn.commit()
+    finally:
+        conn.close()
+    return page_id
 
 
 def _dispatch_httpx_get(url: str, **kwargs) -> MockResponse:
@@ -226,3 +242,225 @@ def test_callback_success(db_client, monkeypatch):
     finally:
         conn.close()
     assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# PAGE-02 tests
+# ---------------------------------------------------------------------------
+
+def test_list_pages(db_client, monkeypatch):
+    """PAGE-02: GET /pages returns tenant's active pages with status derived from debug_token."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+
+    _seed_page(db_client.db_path, client_id, "fb-A", "Page A", "tok-A")
+    _seed_page(db_client.db_path, client_id, "fb-B", "Page B", "tok-B")
+
+    monkeypatch.setattr(
+        "app.fb_client.httpx.get",
+        lambda url, **kw: MockResponse({"data": {"is_valid": True, "expires_at": 0}}),
+    )
+
+    resp = client.get("/pages", headers=_auth_headers(token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list)
+    assert len(body) == 2
+    for entry in body:
+        assert set(entry.keys()) == {"id", "page_fb_id", "page_name", "status", "created_at"}
+        assert entry["status"] == "active"
+    fb_ids = {entry["page_fb_id"] for entry in body}
+    assert fb_ids == {"fb-A", "fb-B"}
+
+
+def test_list_pages_revoked(db_client, monkeypatch):
+    """PAGE-02: revoked debug_token response maps to status='revoked'."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+
+    _seed_page(db_client.db_path, client_id, "fb-X", "Page X", "tok-X")
+
+    monkeypatch.setattr(
+        "app.fb_client.httpx.get",
+        lambda url, **kw: MockResponse(
+            {"data": {"is_valid": False, "error": {"code": 190, "message": "revoked"}}}
+        ),
+    )
+
+    resp = client.get("/pages", headers=_auth_headers(token))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["status"] == "revoked"
+
+
+def test_pages_isolation(db_client, monkeypatch):
+    """PAGE-02 / T-12-09: tenant A cannot see tenant B's pages via GET /pages."""
+    client = db_client.client
+    admin_token = _login(client, db_client.super_admin_email, db_client.super_admin_password)
+    a = _create_client(client, admin_token, "tenant-a@test.local", "pw-a")
+    b = _create_client(client, admin_token, "tenant-b@test.local", "pw-b")
+    token_a = _login(client, "tenant-a@test.local", "pw-a")
+    token_b = _login(client, "tenant-b@test.local", "pw-b")
+
+    _seed_page(db_client.db_path, a["id"], "fb-A-only", "A Page", "tok-A")
+    _seed_page(db_client.db_path, b["id"], "fb-B-only", "B Page", "tok-B")
+
+    monkeypatch.setattr(
+        "app.fb_client.httpx.get",
+        lambda url, **kw: MockResponse({"data": {"is_valid": True, "expires_at": 0}}),
+    )
+
+    resp_a = client.get("/pages", headers=_auth_headers(token_a))
+    assert resp_a.status_code == 200
+    body_a = resp_a.json()
+    assert len(body_a) == 1
+    assert body_a[0]["page_fb_id"] == "fb-A-only"
+    assert all(entry["page_fb_id"] != "fb-B-only" for entry in body_a)
+
+    resp_b = client.get("/pages", headers=_auth_headers(token_b))
+    assert resp_b.status_code == 200
+    body_b = resp_b.json()
+    assert len(body_b) == 1
+    assert body_b[0]["page_fb_id"] == "fb-B-only"
+    assert all(entry["page_fb_id"] != "fb-A-only" for entry in body_b)
+
+
+# ---------------------------------------------------------------------------
+# PAGE-03 tests
+# ---------------------------------------------------------------------------
+
+def test_disconnect_page(db_client, monkeypatch):
+    """PAGE-03: DELETE /pages/{id} unsubscribes webhook + soft-deletes row."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+
+    page_id = _seed_page(db_client.db_path, client_id, "fb-D", "Delete Me", "tok-D")
+
+    delete_calls: list[dict] = []
+
+    def _fake_delete(url, **kw):
+        delete_calls.append(kw.get("params", {}) or {})
+        return MockResponse({"success": True})
+
+    monkeypatch.setattr("app.fb_client.httpx.delete", _fake_delete)
+    monkeypatch.setattr(
+        "app.fb_client.httpx.get",
+        lambda url, **kw: MockResponse({"data": {"is_valid": True, "expires_at": 0}}),
+    )
+
+    resp = client.delete(f"/pages/{page_id}", headers=_auth_headers(token))
+    assert resp.status_code == 200
+    assert "disconnected" in resp.json()["detail"]
+
+    assert len(delete_calls) == 1
+    assert delete_calls[0]["access_token"] == "tok-D"
+
+    conn = get_connection(db_client.db_path)
+    try:
+        row = conn.execute(
+            "SELECT is_active FROM pages WHERE id = ?", (page_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row["is_active"] == 0
+
+    resp_list = client.get("/pages", headers=_auth_headers(token))
+    assert resp_list.status_code == 200
+    assert resp_list.json() == []
+
+
+def test_disconnect_not_found(db_client, monkeypatch):
+    """PAGE-03 / T-12-10: DELETE returns 404 for other tenant's pages and unknown ids."""
+    client = db_client.client
+    admin_token = _login(client, db_client.super_admin_email, db_client.super_admin_password)
+    a = _create_client(client, admin_token, "tenant-a@test.local", "pw-a")
+    b = _create_client(client, admin_token, "tenant-b@test.local", "pw-b")
+    token_a = _login(client, "tenant-a@test.local", "pw-a")
+    token_b = _login(client, "tenant-b@test.local", "pw-b")
+
+    page_id_a = _seed_page(db_client.db_path, a["id"], "fb-A", "A Page", "tok-A")
+
+    monkeypatch.setattr(
+        "app.fb_client.httpx.delete",
+        lambda url, **kw: MockResponse({"success": True}),
+    )
+    monkeypatch.setattr(
+        "app.fb_client.httpx.get",
+        lambda url, **kw: MockResponse({"data": {"is_valid": True, "expires_at": 0}}),
+    )
+
+    # B tries to delete A's page
+    resp_cross = client.delete(f"/pages/{page_id_a}", headers=_auth_headers(token_b))
+    assert resp_cross.status_code == 404
+    assert resp_cross.json()["detail"] == "Page not found"
+
+    # A tries to delete a nonexistent id
+    resp_missing = client.delete("/pages/99999", headers=_auth_headers(token_a))
+    assert resp_missing.status_code == 404
+
+    # Verify A's row was NOT mutated by B's failed attempt
+    conn = get_connection(db_client.db_path)
+    try:
+        row = conn.execute(
+            "SELECT is_active FROM pages WHERE id = ?", (page_id_a,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row["is_active"] == 1
+
+    # A deletes their own page successfully
+    resp_ok = client.delete(f"/pages/{page_id_a}", headers=_auth_headers(token_a))
+    assert resp_ok.status_code == 200
+
+    # Second delete returns 404 (already inactive)
+    resp_again = client.delete(f"/pages/{page_id_a}", headers=_auth_headers(token_a))
+    assert resp_again.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# PAGE-04 tests
+# ---------------------------------------------------------------------------
+
+def test_token_health(db_client, monkeypatch):
+    """PAGE-04: GET /pages/{id}/health reports is_valid + expires_at from debug_token."""
+    client = db_client.client
+    admin_token = _login(client, db_client.super_admin_email, db_client.super_admin_password)
+    a = _create_client(client, admin_token, "tenant-a@test.local", "pw-a")
+    b = _create_client(client, admin_token, "tenant-b@test.local", "pw-b")
+    token_a = _login(client, "tenant-a@test.local", "pw-a")
+    token_b = _login(client, "tenant-b@test.local", "pw-b")
+
+    page_id = _seed_page(db_client.db_path, a["id"], "fb-H", "Health Page", "tok-H")
+
+    current_response: list[MockResponse] = [
+        MockResponse({"data": {"app_id": "test-app-id", "is_valid": True, "expires_at": 0}})
+    ]
+
+    def _fake_get(url, **kw):
+        return current_response[0]
+
+    monkeypatch.setattr("app.fb_client.httpx.get", _fake_get)
+
+    # Phase 1 — valid, non-expiring (expires_at=0 → None)
+    resp1 = client.get(f"/pages/{page_id}/health", headers=_auth_headers(token_a))
+    assert resp1.status_code == 200
+    assert resp1.json() == {"is_valid": True, "expires_at": None}
+
+    # Phase 2 — revoked
+    current_response[0] = MockResponse(
+        {"data": {"is_valid": False, "error": {"code": 190, "message": "expired"}}}
+    )
+    resp2 = client.get(f"/pages/{page_id}/health", headers=_auth_headers(token_a))
+    assert resp2.status_code == 200
+    assert resp2.json() == {"is_valid": False, "expires_at": None}
+
+    # Phase 3 — valid with a real expiry
+    current_response[0] = MockResponse({"data": {"is_valid": True, "expires_at": 1900000000}})
+    resp3 = client.get(f"/pages/{page_id}/health", headers=_auth_headers(token_a))
+    assert resp3.status_code == 200
+    assert resp3.json() == {"is_valid": True, "expires_at": 1900000000}
+
+    # Cross-tenant (T-12-09): tenant B cannot health-check A's page
+    resp_cross = client.get(f"/pages/{page_id}/health", headers=_auth_headers(token_b))
+    assert resp_cross.status_code == 404
