@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     fb_app_secret: str = ""
     fb_redirect_uri: str = ""
 
-    model_config = {"env_file": ".env"}
+    model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()
