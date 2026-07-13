@@ -35,7 +35,7 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
 
 - [x] **Phase 10: DB Foundation** - SQLite schema, WAL mode, Fernet encryption setup — the data layer every subsequent phase depends on (completed 2026-05-27)
 - [x] **Phase 11: Auth & Tenant Management API** - FastAPI login, JWT sessions, and super-admin CRUD for client accounts (completed 2026-05-28)
-- [ ] **Phase 12: Page Connection API + Facebook OAuth** - Clients connect Facebook Pages via OAuth with atomic webhook subscription; App Review submitted
+- [x] **Phase 12: Page Connection API + Facebook OAuth** - Clients connect Facebook Pages via OAuth with atomic webhook subscription; App Review submitted (completed 2026-07-13)
 - [ ] **Phase 13: Page Config, Q&A API + Content Migration** - DB-backed content endpoints that preserve the existing HTTP contract; Obsidian vault retired via seed script
 - [ ] **Phase 14: Bot Multi-Page Routing** - Bot reads token + config per Page ID from FastAPI; PAGE_ACCESS_TOKEN global removed; per-page state isolation
 - [ ] **Phase 15: Admin Panel UI** - React SPA built against stable APIs: tenant management, page connection, and full per-page content editor
@@ -139,10 +139,10 @@ Plans:
 **Plans**: 2 plans
 Plans:
 **Wave 1**
-- [ ] 12-01-PLAN.md — Settings/env additions, app/fb_client.py Graph API helpers (v25.0), GET /auth/facebook/start + GET /auth/facebook/callback with CSRF state JWT, atomic Fernet token store + webhook subscribe with rollback, 6 PAGE-01 tests (PAGE-01)
+- [x] 12-01-PLAN.md — Settings/env additions, app/fb_client.py Graph API helpers (v25.0), GET /auth/facebook/start + GET /auth/facebook/callback with CSRF state JWT, atomic Fernet token store + webhook subscribe with rollback, 6 PAGE-01 tests (PAGE-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 12-02-PLAN.md — GET /pages with lazy debug_token health, DELETE /pages/{id} with best-effort unsubscribe, GET /pages/{id}/health, 6 tests covering list/revoked/isolation/disconnect/404/health (PAGE-02, PAGE-03, PAGE-04)
+- [x] 12-02-PLAN.md — GET /pages with lazy debug_token health, DELETE /pages/{id} with best-effort unsubscribe, GET /pages/{id}/health, 6 tests covering list/revoked/isolation/disconnect/404/health (PAGE-02, PAGE-03, PAGE-04)
 
 ### Phase 13: Page Config, Q&A API + Content Migration
 **Goal**: All bot content (welcome text, menu, Q&A, escalation settings) is served from the database per Page ID; the existing /content HTTP contract is preserved; the Obsidian vault is retired
@@ -197,7 +197,7 @@ Plans:
 | 9. User Memory & Personalization | v1.1 | 1/1 | Complete | 2026-05-20 |
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
 | 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete    | 2026-05-28 |
-| 12. Page Connection API + Facebook OAuth | v1.2 | 0/2 | Planned | - |
+| 12. Page Connection API + Facebook OAuth | v1.2 | 2/2 | Complete   | 2026-07-13 |
 | 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |
 | 15. Admin Panel UI | v1.2 | 0/? | Not started | - |
