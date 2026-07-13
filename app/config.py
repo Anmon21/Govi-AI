@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     super_admin_email: str = ""
     super_admin_password: str = ""
+    fb_app_id: str = ""
+    fb_app_secret: str = ""
+    fb_redirect_uri: str = ""
 
     model_config = {"env_file": ".env"}
 
