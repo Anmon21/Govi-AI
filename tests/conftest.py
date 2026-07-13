@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from passlib.context import CryptContext
 
@@ -40,6 +41,10 @@ def db_client(tmp_path, monkeypatch):
     db_path = str(tmp_path / "test.db")
     monkeypatch.setattr(config_module.settings, "db_path", db_path)
     monkeypatch.setattr(config_module.settings, "jwt_secret", "test-secret-do-not-use-in-prod")
+    monkeypatch.setattr(config_module.settings, "fernet_key", Fernet.generate_key().decode())
+    monkeypatch.setattr(config_module.settings, "fb_app_id", "test-app-id")
+    monkeypatch.setattr(config_module.settings, "fb_app_secret", "test-app-secret")
+    monkeypatch.setattr(config_module.settings, "fb_redirect_uri", "http://localhost:8000/auth/facebook/callback")
     init_schema(db_path)
     conn = get_connection(db_path)
     try:
