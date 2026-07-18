@@ -45,6 +45,7 @@ def db_client(tmp_path, monkeypatch):
     monkeypatch.setattr(config_module.settings, "fb_app_id", "test-app-id")
     monkeypatch.setattr(config_module.settings, "fb_app_secret", "test-app-secret")
     monkeypatch.setattr(config_module.settings, "fb_redirect_uri", "http://localhost:8000/auth/facebook/callback")
+    monkeypatch.setattr(config_module.settings, "internal_secret", "test-internal-secret")
     init_schema(db_path)
     conn = get_connection(db_path)
     try:

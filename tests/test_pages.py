@@ -464,3 +464,64 @@ def test_token_health(db_client, monkeypatch):
     # Cross-tenant (T-12-09): tenant B cannot health-check A's page
     resp_cross = client.get(f"/pages/{page_id}/health", headers=_auth_headers(token_b))
     assert resp_cross.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Internal endpoint — GET /internal/pages/{page_fb_id}/access-token
+# Used by the messenger-bot Node service. Guarded by X-Internal-Key.
+# ---------------------------------------------------------------------------
+
+def test_internal_token_success(db_client):
+    client = db_client.client
+    client_id, _ = _make_client_token(db_client)
+    _seed_page(db_client.db_path, client_id, "fb-page-777", "Internal Page", "the-page-token")
+
+    resp = client.get(
+        "/internal/pages/fb-page-777/access-token",
+        headers={"X-Internal-Key": "test-internal-secret"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"access_token": "the-page-token"}
+
+
+def test_internal_token_forbidden_without_key(db_client):
+    client = db_client.client
+    client_id, _ = _make_client_token(db_client)
+    _seed_page(db_client.db_path, client_id, "fb-page-777", "Internal Page", "the-page-token")
+
+    # Missing header
+    r_missing = client.get("/internal/pages/fb-page-777/access-token")
+    assert r_missing.status_code == 403
+
+    # Wrong secret
+    r_wrong = client.get(
+        "/internal/pages/fb-page-777/access-token",
+        headers={"X-Internal-Key": "wrong-secret"},
+    )
+    assert r_wrong.status_code == 403
+
+
+def test_internal_token_404_for_unknown_page(db_client):
+    client = db_client.client
+    resp = client.get(
+        "/internal/pages/nonexistent-page/access-token",
+        headers={"X-Internal-Key": "test-internal-secret"},
+    )
+    assert resp.status_code == 404
+
+
+def test_internal_token_404_after_disconnect(db_client, monkeypatch):
+    client = db_client.client
+    client_id, client_token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-page-888", "Soon-Disconnected", "tok")
+
+    # Stub the unsubscribe call so we don't hit Facebook
+    monkeypatch.setattr("app.fb_client.unsubscribe_page_webhook", lambda *a, **kw: None)
+    del_resp = client.delete(f"/pages/{page_id}", headers=_auth_headers(client_token))
+    assert del_resp.status_code == 200
+
+    r = client.get(
+        "/internal/pages/fb-page-888/access-token",
+        headers={"X-Internal-Key": "test-internal-secret"},
+    )
+    assert r.status_code == 404

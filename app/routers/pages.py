@@ -1,10 +1,11 @@
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal, Optional
 from urllib.parse import urlencode
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
@@ -239,3 +240,36 @@ async def page_health(
     else:
         expires_at = None
     return HealthResponse(is_valid=is_valid, expires_at=expires_at)
+
+
+@router.get("/internal/pages/{page_fb_id}/access-token", include_in_schema=False)
+async def get_internal_page_access_token(
+    page_fb_id: str,
+    x_internal_key: Annotated[Optional[str], Header()] = None,
+) -> dict:
+    if not settings.internal_secret:
+        raise HTTPException(status_code=500, detail="INTERNAL_SECRET not configured")
+
+    provided = (x_internal_key or "").encode()
+    expected = settings.internal_secret.encode()
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    conn = get_connection(settings.db_path)
+    try:
+        row = conn.execute(
+            "SELECT access_token_enc FROM pages WHERE page_fb_id = ? AND is_active = 1",
+            (page_fb_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row or not row["access_token_enc"]:
+        raise HTTPException(status_code=404, detail="Page not found or token not set")
+
+    try:
+        plain = decrypt_token(row["access_token_enc"])
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="Token decryption failed") from exc
+
+    return {"access_token": plain}
