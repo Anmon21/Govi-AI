@@ -1,9 +1,14 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.routers import health, ai, content, auth, tenants, pages
+
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 
 
 @asynccontextmanager
@@ -28,3 +33,10 @@ app.include_router(content.router)
 app.include_router(auth.router)
 app.include_router(tenants.router)
 app.include_router(pages.router)
+
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+
+@app.get("/landing", include_in_schema=False)
+async def landing():
+    return FileResponse(os.path.join(_STATIC_DIR, "landing.html"))

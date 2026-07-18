@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Govi AI — Chatbot сонголт</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 20px 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header .logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    header .logo span { color: #4f8ef7; }
+
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+    }
+    .hero h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      margin-bottom: 12px;
+      color: #1a1a2e;
+    }
+    .hero p {
+      font-size: 1.05rem;
+      color: #555;
+      max-width: 520px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+
+    /* Budget selector */
+    .budget-bar {
+      display: flex;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 48px;
+    }
+    .budget-bar button {
+      padding: 10px 28px;
+      border: 2px solid #d0d7e3;
+      background: #fff;
+      color: #555;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .budget-bar button:first-child { border-radius: 8px 0 0 8px; }
+    .budget-bar button:last-child  { border-radius: 0 8px 8px 0; }
+    .budget-bar button:not(:first-child) { border-left: none; }
+    .budget-bar button:hover { background: #f0f4ff; color: #1a1a2e; }
+    .budget-bar button.active {
+      background: #1a1a2e;
+      color: #fff;
+      border-color: #1a1a2e;
+    }
+
+    /* Cards */
+    .cards {
+      display: flex;
+      gap: 28px;
+      justify-content: center;
+      padding: 0 20px 60px;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 18px;
+      padding: 36px 32px;
+      width: 340px;
+      border: 2px solid #e4e9f0;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, opacity 0.2s;
+      position: relative;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
+
+    .card.recommended {
+      border-color: #4f8ef7;
+      box-shadow: 0 8px 32px rgba(79,142,247,0.18);
+    }
+    .card.dimmed { opacity: 0.45; }
+
+    .badge {
+      display: inline-block;
+      background: #4f8ef7;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+    .badge.hidden { visibility: hidden; }
+    .badge.green { background: #22c55e; }
+
+    .card-icon {
+      font-size: 2.8rem;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .card h2 {
+      font-size: 1.45rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .card .subtitle {
+      font-size: 0.88rem;
+      color: #888;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+
+    .card .price {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      background: #f0f4ff;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card .price .tag {
+      font-size: 0.75rem;
+      color: #4f8ef7;
+      font-weight: 600;
+      background: #dbeafe;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .features {
+      list-style: none;
+      margin-bottom: 28px;
+    }
+    .features li {
+      font-size: 0.9rem;
+      color: #444;
+      padding: 6px 0;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .features li:last-child { border-bottom: none; }
+    .features li .check { color: #22c55e; font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+    .features li .cross { color: #f87171; font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+
+    .cta {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s, transform 0.1s;
+      text-decoration: none;
+      text-align: center;
+    }
+    .cta:active { transform: scale(0.98); }
+    .cta-primary { background: #4f8ef7; color: #fff; }
+    .cta-primary:hover { background: #3b7de0; }
+    .cta-secondary { background: #f0f4ff; color: #4f8ef7; }
+    .cta-secondary:hover { background: #dbeafe; }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 0.82rem;
+      color: #aaa;
+    }
+
+    /* Recommendation toast */
+    #toast {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      background: #1a1a2e;
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 40px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: transform 0.3s ease;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Govi<span>AI</span></div>
+</header>
+
+<div id="toast"></div>
+
+<section class="hero">
+  <h1>Chatbot-оо сонгоно уу</h1>
+  <p>Та өөрийн бизнесийн хэрэгцээ болон төсөвт тохируулан хамгийн тохиромжтой сонголтоо хийнэ үү.</p>
+
+  <div class="budget-bar">
+    <button onclick="setBudget('low')" id="btn-low">Бага төсөв</button>
+    <button onclick="setBudget('medium')" id="btn-medium">Дунд төсөв</button>
+    <button onclick="setBudget('high')" id="btn-high">Өндөр төсөв</button>
+  </div>
+</section>
+
+<section class="cards">
+
+  <!-- Card 1: Classic Chatbot -->
+  <div class="card" id="card-classic">
+    <div class="badge green" id="badge-classic">Санал болгож байна</div>
+    <span class="card-icon">🤖</span>
+    <h2>Classic Chatbot</h2>
+    <p class="subtitle">Дүрэм дээр суурилсан, найдвартай систем</p>
+
+    <div class="price">
+      💰 Хямд үнэ
+      <span class="tag">Бага төсөв</span>
+    </div>
+
+    <ul class="features">
+      <li><span class="check">✓</span> Тогтмол цэс болон хариулт</li>
+      <li><span class="check">✓</span> Хурдан тохируулах боломжтой</li>
+      <li><span class="check">✓</span> Хүний агентад шилжүүлэх</li>
+      <li><span class="check">✓</span> Найдвартай, тогтвортой ажиллагаа</li>
+      <li><span class="cross">✗</span> Уян хатан ярилцлага байхгүй</li>
+      <li><span class="cross">✗</span> Монгол хэлний дэвшилтэт ойлголт байхгүй</li>
+    </ul>
+
+    <a href="mailto:contact@govi.mn?subject=Classic Chatbot сонголт" class="cta cta-secondary">
+      Холбоо барих
+    </a>
+  </div>
+
+  <!-- Card 2: AI Chatbot (Mongolian) -->
+  <div class="card" id="card-ai">
+    <div class="badge" id="badge-ai">Санал болгож байна</div>
+    <span class="card-icon">✨</span>
+    <h2>AI Chatbot</h2>
+    <p class="subtitle">Монгол хэлээр ярьдаг AI туслах</p>
+
+    <div class="price">
+      🚀 Премиум үнэ
+      <span class="tag">Өндөр төсөв</span>
+    </div>
+
+    <ul class="features">
+      <li><span class="check">✓</span> Монгол хэлний дэвшилтэт ойлголт</li>
+      <li><span class="check">✓</span> Уян хатан, байгалийн ярилцлага</li>
+      <li><span class="check">✓</span> Хэрэглэгчийн санааг автоматаар таних</li>
+      <li><span class="check">✓</span> Хүний агентад шилжүүлэх</li>
+      <li><span class="check">✓</span> Мэдлэгийн санг автоматаар ашиглах</li>
+      <li><span class="check">✓</span> Тасралтгүй суралцах чадвар</li>
+    </ul>
+
+    <a href="mailto:contact@govi.mn?subject=AI Chatbot сонголт" class="cta cta-primary">
+      Холбоо барих
+    </a>
+  </div>
+
+</section>
+
+<footer>
+  &copy; 2026 Govi AI — Facebook Messenger Customer Support
+</footer>
+
+<script>
+  const cards = { classic: 'card-classic', ai: 'card-ai' };
+  const badges = { classic: 'badge-classic', ai: 'badge-ai' };
+
+  function setBudget(level) {
+    // Update active button
+    ['low','medium','high'].forEach(l => {
+      document.getElementById('btn-' + l).classList.toggle('active', l === level);
+    });
+
+    const classicCard = document.getElementById('card-classic');
+    const aiCard = document.getElementById('card-ai');
+    const classicBadge = document.getElementById('badge-classic');
+    const aiBadge = document.getElementById('badge-ai');
+
+    // Reset
+    classicCard.classList.remove('recommended', 'dimmed');
+    aiCard.classList.remove('recommended', 'dimmed');
+    classicBadge.classList.add('hidden');
+    aiBadge.classList.add('hidden');
+
+    if (level === 'low') {
+      classicCard.classList.add('recommended');
+      aiCard.classList.add('dimmed');
+      classicBadge.classList.remove('hidden');
+      showToast('💡 Бага төсөвт Classic Chatbot тохиромжтой');
+    } else if (level === 'medium') {
+      classicCard.classList.add('recommended');
+      showToast('💡 Дунд төсөвт Classic Chatbot-оос эхлэхийг зөвлөж байна');
+      classicBadge.classList.remove('hidden');
+    } else {
+      aiCard.classList.add('recommended');
+      classicCard.classList.add('dimmed');
+      aiBadge.classList.remove('hidden');
+      showToast('🚀 Өндөр төсөвт AI Chatbot хамгийн тохиромжтой');
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+
+  // Default: show low budget recommendation on load
+  setBudget('low');
+</script>
+</body>
+</html>
