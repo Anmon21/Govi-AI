@@ -154,7 +154,15 @@ Plans:
   3. A client can create, edit, and delete Q&A categories and answers for their Page via the API; the bot serves the updated Q&A tree without a restart
   4. A client can update the escalation PSID and handoff message for their Page via the API
   5. Running the one-time seed script migrates all existing Obsidian vault Q&A content into the database, and the bot continues to respond correctly to Q&A queries using DB-backed content
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+- [ ] 13-01-PLAN.md — DB-backed HMAC-guarded /content read endpoints (preserve contract, required page_id), retire vault
+- [ ] 13-02-PLAN.md — PUT /pages/{page_id}/config whole-row replace (welcome_text, menu_json, escalation) — CONTENT-01/02/04
+- [ ] 13-04-PLAN.md — scripts/seed_qa.py one-time vault→DB Q&A migration (wipe+reload, ensure page_configs) — DB-02
+
+**Wave 2** *(blocked on 13-02)*
+- [ ] 13-03-PLAN.md — Q&A REST CRUD under /pages/{page_id}/qa with app-layer category_id integrity — CONTENT-03
 
 ### Phase 14: Bot Multi-Page Routing
 **Goal**: The bot handles webhook events from multiple Facebook Pages by fetching the correct token and content config per Page ID from FastAPI; the PAGE_ACCESS_TOKEN global is fully removed; per-page state is isolated
@@ -204,4 +212,4 @@ Plans:
 
 ---
 
-*Last updated: 2026-05-28 — Phase 12 planned (2 plans, 2 waves)*
+*Last updated: 2026-07-21 — Phase 13 planned (4 plans, 2 waves)*
