@@ -375,3 +375,55 @@ async def get_internal_page_access_token(
         raise HTTPException(status_code=500, detail="Token decryption failed") from exc
 
     return {"access_token": plain}
+
+
+@router.get(
+    "/internal/pages/{page_fb_id}/config",
+    include_in_schema=False,
+    response_model=InternalPageConfigResponse,
+)
+async def get_internal_page_config(
+    page_fb_id: str,
+    x_internal_key: Annotated[Optional[str], Header()] = None,
+) -> InternalPageConfigResponse:
+    """Bot-facing config read, keyed on the Facebook page_fb_id (mirrors
+    get_internal_page_access_token above, not the tenant-scoped write API)."""
+    if not settings.internal_secret:
+        raise HTTPException(status_code=500, detail="INTERNAL_SECRET not configured")
+
+    provided = (x_internal_key or "").encode()
+    expected = settings.internal_secret.encode()
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    conn = get_connection(settings.db_path)
+    try:
+        page_row = conn.execute(
+            "SELECT id FROM pages WHERE page_fb_id = ? AND is_active = 1",
+            (page_fb_id,),
+        ).fetchone()
+        if not page_row:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        config_row = conn.execute(
+            "SELECT welcome_text, menu_json, escalation_psid, escalation_message "
+            "FROM page_configs WHERE page_id = ?",
+            (page_row["id"],),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not config_row:
+        return InternalPageConfigResponse(
+            welcome_text="",
+            menu_json=[],
+            escalation_psid=None,
+            escalation_message=None,
+        )
+
+    return InternalPageConfigResponse(
+        welcome_text=config_row["welcome_text"],
+        menu_json=[MenuItem(**item) for item in json.loads(config_row["menu_json"])],
+        escalation_psid=config_row["escalation_psid"],
+        escalation_message=config_row["escalation_message"],
+    )
