@@ -71,6 +71,14 @@ class QAItemCreateRequest(BaseModel):
     enabled: bool = True
 
 
+class QAItemUpdateRequest(BaseModel):
+    type: Literal["category", "question"]
+    title: str
+    body: str = ""
+    category_id: Optional[int] = None
+    enabled: bool = True
+
+
 class QAItemResponse(BaseModel):
     id: int
     page_id: int
@@ -464,6 +472,91 @@ async def create_qa(
         enabled=bool(row["enabled"]),
         created_at=row["created_at"],
     )
+
+
+def _require_owned_qa_item(conn, page_id: int, item_id: int) -> None:
+    """Raise 404 unless item_id is a qa_items row belonging to page_id."""
+    row = conn.execute(
+        "SELECT id FROM qa_items WHERE id = ? AND page_id = ?", (item_id, page_id)
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Q&A item not found")
+
+
+@router.put("/pages/{page_id}/qa/{item_id}", response_model=QAItemResponse)
+async def update_qa(
+    page_id: int,
+    item_id: int,
+    request: QAItemUpdateRequest,
+    current: dict = Depends(get_current_tenant),
+) -> QAItemResponse:
+    """Whole-row replace of a Q&A item on a tenant-owned page. `page_id` is
+    the INTERNAL `pages.id`."""
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        _require_owned_page(conn, page_id, tenant_id)
+        _require_owned_qa_item(conn, page_id, item_id)
+
+        if request.category_id is not None and request.category_id == item_id:
+            raise HTTPException(
+                status_code=400, detail="category_id cannot reference itself"
+            )
+        _validate_category_ref(conn, page_id, request.category_id)
+
+        conn.execute(
+            "UPDATE qa_items SET type = ?, title = ?, body = ?, category_id = ?, "
+            "enabled = ? WHERE id = ? AND page_id = ?",
+            (
+                request.type,
+                request.title,
+                request.body,
+                request.category_id,
+                1 if request.enabled else 0,
+                item_id,
+                page_id,
+            ),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT id, page_id, type, title, body, category_id, enabled, created_at "
+            "FROM qa_items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    return QAItemResponse(
+        id=row["id"],
+        page_id=row["page_id"],
+        type=row["type"],
+        title=row["title"],
+        body=row["body"],
+        category_id=row["category_id"],
+        enabled=bool(row["enabled"]),
+        created_at=row["created_at"],
+    )
+
+
+@router.delete("/pages/{page_id}/qa/{item_id}", status_code=200)
+async def delete_qa(
+    page_id: int, item_id: int, current: dict = Depends(get_current_tenant)
+) -> dict:
+    """Delete a Q&A item on a tenant-owned page. `page_id` is the INTERNAL
+    `pages.id`."""
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        _require_owned_page(conn, page_id, tenant_id)
+        _require_owned_qa_item(conn, page_id, item_id)
+
+        conn.execute(
+            "DELETE FROM qa_items WHERE id = ? AND page_id = ?", (item_id, page_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"detail": f"Q&A item {item_id} deleted"}
 
 
 @router.get("/internal/pages/{page_fb_id}/access-token", include_in_schema=False)
