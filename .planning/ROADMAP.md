@@ -157,9 +157,9 @@ Plans:
 **Plans**: 4 plans
 Plans:
 **Wave 1**
-- [ ] 13-01-PLAN.md — DB-backed HMAC-guarded /content read endpoints (preserve contract, required page_id), retire vault
-- [ ] 13-02-PLAN.md — PUT /pages/{page_id}/config whole-row replace (welcome_text, menu_json, escalation) — CONTENT-01/02/04
-- [ ] 13-04-PLAN.md — scripts/seed_qa.py one-time vault→DB Q&A migration (wipe+reload, ensure page_configs) — DB-02
+- [x] 13-01-PLAN.md — DB-backed HMAC-guarded /content read endpoints (preserve contract, required page_id), retire vault
+- [x] 13-02-PLAN.md — PUT /pages/{page_id}/config whole-row replace (welcome_text, menu_json, escalation) — CONTENT-01/02/04
+- [x] 13-04-PLAN.md — scripts/seed_qa.py one-time vault→DB Q&A migration (wipe+reload, ensure page_configs) — DB-02
 
 **Wave 2** *(blocked on 13-02)*
 - [ ] 13-03-PLAN.md — Q&A REST CRUD under /pages/{page_id}/qa with app-layer category_id integrity — CONTENT-03
@@ -206,7 +206,7 @@ Plans:
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
 | 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete    | 2026-05-28 |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 2/2 | Complete   | 2026-07-13 |
-| 13. Page Config, Q&A API + Content Migration | v1.2 | 0/? | Not started | - |
+| 13. Page Config, Q&A API + Content Migration | v1.2 | 3/4 | In Progress|  |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |
 | 15. Admin Panel UI | v1.2 | 0/? | Not started | - |
 
