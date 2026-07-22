@@ -63,6 +63,25 @@ class InternalPageConfigResponse(BaseModel):
     escalation_message: Optional[str]
 
 
+class QAItemCreateRequest(BaseModel):
+    type: Literal["category", "question"]
+    title: str
+    body: str = ""
+    category_id: Optional[int] = None
+    enabled: bool = True
+
+
+class QAItemResponse(BaseModel):
+    id: int
+    page_id: int
+    type: str
+    title: str
+    body: str
+    category_id: Optional[int]
+    enabled: bool
+    created_at: str
+
+
 def create_oauth_state(tenant_id: str) -> str:
     """Generate a short-lived signed state token for OAuth CSRF protection."""
     if not settings.jwt_secret:
@@ -341,6 +360,109 @@ async def put_page_config(
         escalation_psid=config_row["escalation_psid"],
         escalation_message=config_row["escalation_message"],
         updated_at=config_row["updated_at"],
+    )
+
+
+def _require_owned_page(conn, page_id: int, tenant_id: int) -> None:
+    """Raise 404 unless page_id is an active page owned by tenant_id."""
+    row = conn.execute(
+        "SELECT id FROM pages WHERE id = ? AND tenant_id = ? AND is_active = 1",
+        (page_id, tenant_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Page not found")
+
+
+def _validate_category_ref(conn, page_id: int, category_id: Optional[int]) -> None:
+    """Raise 400 unless category_id references an existing category on page_id."""
+    if category_id is None:
+        return
+    row = conn.execute(
+        "SELECT id FROM qa_items WHERE id = ? AND page_id = ? AND type = 'category'",
+        (category_id, page_id),
+    ).fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=400, detail="category_id must reference a category on this page"
+        )
+
+
+@router.get("/pages/{page_id}/qa", response_model=list[QAItemResponse])
+async def list_qa(
+    page_id: int, current: dict = Depends(get_current_tenant)
+) -> list[QAItemResponse]:
+    """List all Q&A items (categories + questions, enabled or not) for a
+    tenant-owned page. `page_id` is the INTERNAL `pages.id`."""
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        _require_owned_page(conn, page_id, tenant_id)
+        rows = conn.execute(
+            "SELECT id, page_id, type, title, body, category_id, enabled, created_at "
+            "FROM qa_items WHERE page_id = ? ORDER BY id ASC",
+            (page_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        QAItemResponse(
+            id=r["id"],
+            page_id=r["page_id"],
+            type=r["type"],
+            title=r["title"],
+            body=r["body"],
+            category_id=r["category_id"],
+            enabled=bool(r["enabled"]),
+            created_at=r["created_at"],
+        )
+        for r in rows
+    ]
+
+
+@router.post("/pages/{page_id}/qa", response_model=QAItemResponse, status_code=201)
+async def create_qa(
+    page_id: int, request: QAItemCreateRequest, current: dict = Depends(get_current_tenant)
+) -> QAItemResponse:
+    """Create a Q&A category or question on a tenant-owned page. `page_id` is
+    the INTERNAL `pages.id`."""
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        _require_owned_page(conn, page_id, tenant_id)
+        _validate_category_ref(conn, page_id, request.category_id)
+
+        cur = conn.execute(
+            "INSERT INTO qa_items (page_id, type, title, body, category_id, enabled) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                page_id,
+                request.type,
+                request.title,
+                request.body,
+                request.category_id,
+                1 if request.enabled else 0,
+            ),
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        row = conn.execute(
+            "SELECT id, page_id, type, title, body, category_id, enabled, created_at "
+            "FROM qa_items WHERE id = ?",
+            (new_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    return QAItemResponse(
+        id=row["id"],
+        page_id=row["page_id"],
+        type=row["type"],
+        title=row["title"],
+        body=row["body"],
+        category_id=row["category_id"],
+        enabled=bool(row["enabled"]),
+        created_at=row["created_at"],
     )
 
 
