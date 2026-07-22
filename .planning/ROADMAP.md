@@ -36,7 +36,7 @@ Full archive: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 10: DB Foundation** - SQLite schema, WAL mode, Fernet encryption setup — the data layer every subsequent phase depends on (completed 2026-05-27)
 - [x] **Phase 11: Auth & Tenant Management API** - FastAPI login, JWT sessions, and super-admin CRUD for client accounts (completed 2026-05-28)
 - [x] **Phase 12: Page Connection API + Facebook OAuth** - Clients connect Facebook Pages via OAuth with atomic webhook subscription; App Review submitted (completed 2026-07-13)
-- [ ] **Phase 13: Page Config, Q&A API + Content Migration** - DB-backed content endpoints that preserve the existing HTTP contract; Obsidian vault retired via seed script
+- [x] **Phase 13: Page Config, Q&A API + Content Migration** - DB-backed content endpoints that preserve the existing HTTP contract; Obsidian vault retired via seed script (completed 2026-07-22)
 - [ ] **Phase 14: Bot Multi-Page Routing** - Bot reads token + config per Page ID from FastAPI; PAGE_ACCESS_TOKEN global removed; per-page state isolation
 - [ ] **Phase 15: Admin Panel UI** - React SPA built against stable APIs: tenant management, page connection, and full per-page content editor
 
@@ -162,7 +162,7 @@ Plans:
 - [x] 13-04-PLAN.md — scripts/seed_qa.py one-time vault→DB Q&A migration (wipe+reload, ensure page_configs) — DB-02
 
 **Wave 2** *(blocked on 13-02)*
-- [ ] 13-03-PLAN.md — Q&A REST CRUD under /pages/{page_id}/qa with app-layer category_id integrity — CONTENT-03
+- [x] 13-03-PLAN.md — Q&A REST CRUD under /pages/{page_id}/qa with app-layer category_id integrity — CONTENT-03
 
 ### Phase 14: Bot Multi-Page Routing
 **Goal**: The bot handles webhook events from multiple Facebook Pages by fetching the correct token and content config per Page ID from FastAPI; the PAGE_ACCESS_TOKEN global is fully removed; per-page state is isolated
@@ -206,7 +206,7 @@ Plans:
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
 | 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete    | 2026-05-28 |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 2/2 | Complete   | 2026-07-13 |
-| 13. Page Config, Q&A API + Content Migration | v1.2 | 3/4 | In Progress|  |
+| 13. Page Config, Q&A API + Content Migration | v1.2 | 4/4 | Complete   | 2026-07-22 |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |
 | 15. Admin Panel UI | v1.2 | 0/? | Not started | - |
 
