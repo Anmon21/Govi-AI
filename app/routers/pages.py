@@ -1,4 +1,5 @@
 import hmac
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal, Optional
@@ -30,6 +31,36 @@ class PageResponse(BaseModel):
 class HealthResponse(BaseModel):
     is_valid: bool
     expires_at: int | None
+
+
+class MenuItem(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    title: str
+    payload: str
+
+
+class PageConfigRequest(BaseModel):
+    welcome_text: str
+    menu_json: list[MenuItem]
+    escalation_psid: Optional[str] = None
+    escalation_message: Optional[str] = None
+
+
+class PageConfigResponse(BaseModel):
+    page_id: int
+    welcome_text: str
+    menu_json: list[MenuItem]
+    escalation_psid: Optional[str]
+    escalation_message: Optional[str]
+    updated_at: str
+
+
+class InternalPageConfigResponse(BaseModel):
+    welcome_text: str
+    menu_json: list[MenuItem]
+    escalation_psid: Optional[str]
+    escalation_message: Optional[str]
 
 
 def create_oauth_state(tenant_id: str) -> str:
@@ -240,6 +271,77 @@ async def page_health(
     else:
         expires_at = None
     return HealthResponse(is_valid=is_valid, expires_at=expires_at)
+
+
+@router.put("/pages/{page_id}/config", response_model=PageConfigResponse)
+async def put_page_config(
+    page_id: int, request: PageConfigRequest, current: dict = Depends(get_current_tenant)
+) -> PageConfigResponse:
+    """Whole-row replace of the page_configs row for a tenant-owned page.
+
+    `page_id` here is the INTERNAL `pages.id` (a tenant-scoped resource) —
+    contrast with the internal read API below, which is keyed on the
+    Facebook `page_fb_id`.
+    """
+    tenant_id = int(current["sub"])
+    conn = get_connection(settings.db_path)
+    try:
+        row = conn.execute(
+            "SELECT id FROM pages WHERE id = ? AND tenant_id = ? AND is_active = 1",
+            (page_id, tenant_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Page not found")
+
+        menu_str = json.dumps([m.model_dump() for m in request.menu_json])
+
+        existing = conn.execute(
+            "SELECT id FROM page_configs WHERE page_id = ?", (page_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE page_configs SET welcome_text = ?, menu_json = ?, "
+                "escalation_psid = ?, escalation_message = ?, "
+                "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE page_id = ?",
+                (
+                    request.welcome_text,
+                    menu_str,
+                    request.escalation_psid,
+                    request.escalation_message,
+                    page_id,
+                ),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO page_configs "
+                "(page_id, welcome_text, menu_json, escalation_psid, escalation_message) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    page_id,
+                    request.welcome_text,
+                    menu_str,
+                    request.escalation_psid,
+                    request.escalation_message,
+                ),
+            )
+        conn.commit()
+
+        config_row = conn.execute(
+            "SELECT welcome_text, menu_json, escalation_psid, escalation_message, updated_at "
+            "FROM page_configs WHERE page_id = ?",
+            (page_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    return PageConfigResponse(
+        page_id=page_id,
+        welcome_text=config_row["welcome_text"],
+        menu_json=[MenuItem(**item) for item in json.loads(config_row["menu_json"])],
+        escalation_psid=config_row["escalation_psid"],
+        escalation_message=config_row["escalation_message"],
+        updated_at=config_row["updated_at"],
+    )
 
 
 @router.get("/internal/pages/{page_fb_id}/access-token", include_in_schema=False)
