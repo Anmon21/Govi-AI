@@ -1,5 +1,4 @@
 import os
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,14 +10,7 @@ from app.routers import health, ai, content, auth, tenants, pages
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    content._vault.clear()
-    content._vault.update(content.load_vault())
-    yield
-
-
-app = FastAPI(title="Govi AI", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Govi AI", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,

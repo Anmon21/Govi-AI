@@ -1,18 +1,13 @@
-import logging
-import os
-from typing import Optional
-import yaml
-import frontmatter
-from fastapi import APIRouter, HTTPException, Query
+import hmac
+from typing import Annotated, Optional
+
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.config import settings
-
-logger = logging.getLogger(__name__)
+from app.db import get_connection
 
 router = APIRouter(prefix="/content", tags=["content"])
-
-_vault: dict[str, dict] = {}
 
 
 class ContentResponse(BaseModel):
@@ -32,84 +27,97 @@ class ContentListResponse(BaseModel):
     items: list[ContentListItem]
 
 
-def load_vault() -> dict[str, dict]:
-    vault_path = settings.vault_path
-    if not vault_path or not os.path.isdir(vault_path):
-        logger.warning("VAULT_PATH not set or directory missing — starting with empty content")
-        return {}
+def _check_internal_key(x_internal_key: Optional[str]) -> None:
+    if not settings.internal_secret:
+        raise HTTPException(status_code=500, detail="INTERNAL_SECRET not configured")
 
-    result: dict[str, dict] = {}
-    for entry in os.scandir(vault_path):
-        if not entry.is_file() or not entry.name.endswith(".md"):
-            continue
-        try:
-            with open(entry.path, encoding="utf-8") as f:
-                post = frontmatter.load(f)
-        except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
-            logger.warning("Skipping %s: %s", entry.name, e)
-            continue
+    provided = (x_internal_key or "").encode()
+    expected = settings.internal_secret.encode()
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
 
-        meta = post.metadata
-        if not isinstance(meta.get("enabled"), bool) or not meta["enabled"]:
-            continue
 
-        content_id = meta.get("id")
-        if not isinstance(content_id, str) or not content_id:
-            logger.warning("Skipping %s: missing or non-string 'id'", entry.name)
-            continue
-
-        if content_id in result:
-            logger.warning("ID collision: '%s' from %s (skipping duplicate)", content_id, entry.name)
-            continue
-
-        if not all(isinstance(meta.get(k), str) and meta.get(k) for k in ("type", "title")):
-            logger.warning("Skipping %s: missing required string fields (type, title)", entry.name)
-            continue
-
-        category_value = meta.get("category")
-        if category_value is not None and (not isinstance(category_value, str) or not category_value):
-            logger.warning("Skipping %s: 'category' present but not a non-empty string", entry.name)
-            continue
-
-        result[content_id] = {
-            "id": content_id,
-            "type": meta["type"],
-            "title": meta["title"],
-            "category": category_value,
-            "body": post.content,
-        }
-
-    return result
+def _resolve_page_id(conn, page_fb_id: str) -> int:
+    """Resolve a Facebook page_fb_id to the internal pages.id; 404 if not an active page."""
+    row = conn.execute(
+        "SELECT id FROM pages WHERE page_fb_id = ? AND is_active = 1",
+        (page_fb_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return row["id"]
 
 
 @router.get("", response_model=ContentListResponse)
 async def list_content(
+    page_id: str = Query(..., description="Required. The Facebook page_fb_id (not the internal pages.id)."),
     type: str = Query("", description="Required. Filter by item type, e.g. 'category' or 'question'."),
     category: Optional[str] = Query(None, description="Optional. When type='question', restrict to a category id."),
+    x_internal_key: Annotated[Optional[str], Header()] = None,
 ):
+    _check_internal_key(x_internal_key)
     if not type:
         raise HTTPException(status_code=400, detail="type query parameter is required")
+
+    conn = get_connection(settings.db_path)
+    try:
+        internal_page_id = _resolve_page_id(conn, page_id)
+
+        category_id: Optional[int] = None
+        if category is not None:
+            try:
+                category_id = int(category)
+            except ValueError:
+                return ContentListResponse(items=[])
+
+        if category_id is not None:
+            rows = conn.execute(
+                "SELECT id, type, title FROM qa_items "
+                "WHERE page_id = ? AND type = ? AND enabled = 1 AND category_id = ? "
+                "ORDER BY id ASC",
+                (internal_page_id, type, category_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, type, title FROM qa_items "
+                "WHERE page_id = ? AND type = ? AND enabled = 1 "
+                "ORDER BY id ASC",
+                (internal_page_id, type),
+            ).fetchall()
+    finally:
+        conn.close()
+
     items = [
-        ContentListItem(id=item["id"], type=item["type"], title=item["title"])
-        for item in _vault.values()
-        if item["type"] == type
-        and (category is None or item.get("category") == category)
+        ContentListItem(id=str(row["id"]), type=row["type"], title=row["title"])
+        for row in rows
     ]
-    items.sort(key=lambda i: i.id)
     return ContentListResponse(items=items)
 
 
 @router.get("/{content_id}", response_model=ContentResponse)
-async def get_content(content_id: str):
-    item = _vault.get(content_id)
-    if item is None:
+async def get_content(
+    content_id: str,
+    page_id: str = Query(..., description="Required. The Facebook page_fb_id (not the internal pages.id)."),
+    x_internal_key: Annotated[Optional[str], Header()] = None,
+):
+    _check_internal_key(x_internal_key)
+
+    try:
+        item_id = int(content_id)
+    except ValueError:
         raise HTTPException(status_code=404, detail="Content not found")
-    return ContentResponse(**item)
 
+    conn = get_connection(settings.db_path)
+    try:
+        internal_page_id = _resolve_page_id(conn, page_id)
+        row = conn.execute(
+            "SELECT id, type, title, body FROM qa_items "
+            "WHERE id = ? AND page_id = ? AND enabled = 1",
+            (item_id, internal_page_id),
+        ).fetchone()
+    finally:
+        conn.close()
 
-@router.post("/reload")
-async def reload_vault():
-    global _vault
-    new_vault = load_vault()
-    _vault = new_vault
-    return {"reloaded": True, "content_count": len(_vault)}
+    if row is None:
+        raise HTTPException(status_code=404, detail="Content not found")
+    return ContentResponse(id=str(row["id"]), type=row["type"], title=row["title"], body=row["body"])
