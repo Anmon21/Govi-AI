@@ -746,3 +746,188 @@ def test_internal_config_defaults_when_no_row(db_client):
     assert body["menu_json"] == []
     assert body["escalation_psid"] is None
     assert body["escalation_message"] is None
+
+
+# ---------------------------------------------------------------------------
+# CONTENT-03 — Q&A CRUD: /pages/{page_id}/qa[/{item_id}]
+# ---------------------------------------------------------------------------
+
+def test_qa_full_crud_cycle(db_client):
+    """CONTENT-03: POST category, POST question, GET list, PUT, DELETE full cycle."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-qa-1", "QA Page", "tok-qa-1")
+
+    resp_cat = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "category", "title": "Products"},
+        headers=_auth_headers(token),
+    )
+    assert resp_cat.status_code == 201
+    category = resp_cat.json()
+    assert category["page_id"] == page_id
+    assert category["type"] == "category"
+    assert category["title"] == "Products"
+    assert category["category_id"] is None
+    assert category["enabled"] is True
+
+    resp_q = client.post(
+        f"/pages/{page_id}/qa",
+        json={
+            "type": "question",
+            "title": "What is the price?",
+            "body": "It costs $10.",
+            "category_id": category["id"],
+        },
+        headers=_auth_headers(token),
+    )
+    assert resp_q.status_code == 201
+    question = resp_q.json()
+    assert question["category_id"] == category["id"]
+
+    resp_list = client.get(f"/pages/{page_id}/qa", headers=_auth_headers(token))
+    assert resp_list.status_code == 200
+    ids = {item["id"] for item in resp_list.json()}
+    assert ids == {category["id"], question["id"]}
+
+    resp_put = client.put(
+        f"/pages/{page_id}/qa/{question['id']}",
+        json={
+            "type": "question",
+            "title": "Updated question",
+            "body": "Updated answer.",
+            "category_id": category["id"],
+            "enabled": False,
+        },
+        headers=_auth_headers(token),
+    )
+    assert resp_put.status_code == 200
+    updated = resp_put.json()
+    assert updated["title"] == "Updated question"
+    assert updated["body"] == "Updated answer."
+    assert updated["enabled"] is False
+
+    resp_del = client.delete(
+        f"/pages/{page_id}/qa/{question['id']}", headers=_auth_headers(token)
+    )
+    assert resp_del.status_code == 200
+    assert str(question["id"]) in resp_del.json()["detail"]
+
+    resp_list_after = client.get(f"/pages/{page_id}/qa", headers=_auth_headers(token))
+    assert resp_list_after.status_code == 200
+    ids_after = {item["id"] for item in resp_list_after.json()}
+    assert ids_after == {category["id"]}
+
+
+def test_qa_post_invalid_category_ref_400(db_client):
+    """CONTENT-03: POST a question with a non-existent category_id -> 400."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-qa-2", "QA Page 2", "tok-qa-2")
+
+    resp = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "question", "title": "Orphan question", "category_id": 99999},
+        headers=_auth_headers(token),
+    )
+    assert resp.status_code == 400
+
+
+def test_qa_category_ref_other_page_rejected_400(db_client):
+    """CONTENT-03: a category_id that exists but on a different page is rejected -> 400."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id_1 = _seed_page(db_client.db_path, client_id, "fb-qa-3a", "QA Page 3A", "tok-qa-3a")
+    page_id_2 = _seed_page(db_client.db_path, client_id, "fb-qa-3b", "QA Page 3B", "tok-qa-3b")
+
+    resp_cat = client.post(
+        f"/pages/{page_id_1}/qa",
+        json={"type": "category", "title": "Page 1 Category"},
+        headers=_auth_headers(token),
+    )
+    assert resp_cat.status_code == 201
+    other_page_category_id = resp_cat.json()["id"]
+
+    resp = client.post(
+        f"/pages/{page_id_2}/qa",
+        json={
+            "type": "question",
+            "title": "Cross-page question",
+            "category_id": other_page_category_id,
+        },
+        headers=_auth_headers(token),
+    )
+    assert resp.status_code == 400
+
+
+def test_qa_cross_tenant_404(db_client):
+    """CONTENT-03: tenant B cannot GET list, PUT, or DELETE Q&A on tenant A's page."""
+    client = db_client.client
+    admin_token = _login(client, db_client.super_admin_email, db_client.super_admin_password)
+    a = _create_client(client, admin_token, "qa-tenant-a@test.local", "pw-a")
+    b = _create_client(client, admin_token, "qa-tenant-b@test.local", "pw-b")
+    token_a = _login(client, "qa-tenant-a@test.local", "pw-a")
+    token_b = _login(client, "qa-tenant-b@test.local", "pw-b")
+
+    page_id_a = _seed_page(db_client.db_path, a["id"], "fb-qa-cross", "A's QA Page", "tok-a")
+
+    resp_cat = client.post(
+        f"/pages/{page_id_a}/qa",
+        json={"type": "category", "title": "A's Category"},
+        headers=_auth_headers(token_a),
+    )
+    assert resp_cat.status_code == 201
+    item_id = resp_cat.json()["id"]
+
+    resp_list = client.get(f"/pages/{page_id_a}/qa", headers=_auth_headers(token_b))
+    assert resp_list.status_code == 404
+
+    resp_put = client.put(
+        f"/pages/{page_id_a}/qa/{item_id}",
+        json={"type": "category", "title": "Hijacked"},
+        headers=_auth_headers(token_b),
+    )
+    assert resp_put.status_code == 404
+
+    resp_del = client.delete(
+        f"/pages/{page_id_a}/qa/{item_id}", headers=_auth_headers(token_b)
+    )
+    assert resp_del.status_code == 404
+
+
+def test_qa_item_page_mismatch_404(db_client):
+    """CONTENT-03: PUT/DELETE with an item_id belonging to a different owned page -> 404."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id_1 = _seed_page(db_client.db_path, client_id, "fb-qa-4a", "QA Page 4A", "tok-qa-4a")
+    page_id_2 = _seed_page(db_client.db_path, client_id, "fb-qa-4b", "QA Page 4B", "tok-qa-4b")
+
+    resp_cat = client.post(
+        f"/pages/{page_id_1}/qa",
+        json={"type": "category", "title": "Page 1 Only"},
+        headers=_auth_headers(token),
+    )
+    assert resp_cat.status_code == 201
+    item_id = resp_cat.json()["id"]
+
+    resp_put = client.put(
+        f"/pages/{page_id_2}/qa/{item_id}",
+        json={"type": "category", "title": "Mismatch"},
+        headers=_auth_headers(token),
+    )
+    assert resp_put.status_code == 404
+
+    resp_del = client.delete(f"/pages/{page_id_2}/qa/{item_id}", headers=_auth_headers(token))
+    assert resp_del.status_code == 404
+
+
+def test_qa_unauthenticated_401(db_client):
+    """CONTENT-03: POST with no Authorization header is rejected."""
+    client = db_client.client
+    client_id, _ = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-qa-5", "QA Page 5", "tok-qa-5")
+
+    resp = client.post(
+        f"/pages/{page_id}/qa", json={"type": "category", "title": "No auth"}
+    )
+    assert resp.status_code == 401
