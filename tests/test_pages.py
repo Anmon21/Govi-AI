@@ -525,3 +525,224 @@ def test_internal_token_404_after_disconnect(db_client, monkeypatch):
         headers={"X-Internal-Key": "test-internal-secret"},
     )
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# CONTENT-01/02/04 — PUT /pages/{page_id}/config
+# ---------------------------------------------------------------------------
+
+def test_put_config_creates_then_updates(db_client):
+    """CONTENT-01/02/04: first PUT creates the config row; second PUT overwrites it."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-cfg-1", "Config Page", "tok-cfg-1")
+
+    payload1 = {
+        "welcome_text": "Welcome!",
+        "menu_json": [{"title": "Products", "payload": "MENU_PRODUCTS"}],
+        "escalation_psid": "psid-1",
+        "escalation_message": "Talk to a human",
+    }
+    resp1 = client.put(
+        f"/pages/{page_id}/config", json=payload1, headers=_auth_headers(token)
+    )
+    assert resp1.status_code == 200
+    body1 = resp1.json()
+    assert body1["page_id"] == page_id
+    assert body1["welcome_text"] == "Welcome!"
+    assert body1["menu_json"] == [{"title": "Products", "payload": "MENU_PRODUCTS"}]
+    assert body1["escalation_psid"] == "psid-1"
+    assert body1["escalation_message"] == "Talk to a human"
+
+    payload2 = {
+        "welcome_text": "New welcome",
+        "menu_json": [{"title": "Support", "payload": "MENU_SUPPORT"}],
+        "escalation_psid": "psid-2",
+        "escalation_message": "Different message",
+    }
+    resp2 = client.put(
+        f"/pages/{page_id}/config", json=payload2, headers=_auth_headers(token)
+    )
+    assert resp2.status_code == 200
+    body2 = resp2.json()
+    assert body2["welcome_text"] == "New welcome"
+    assert body2["menu_json"] == [{"title": "Support", "payload": "MENU_SUPPORT"}]
+    assert body2["escalation_psid"] == "psid-2"
+    assert body2["escalation_message"] == "Different message"
+
+    conn = get_connection(db_client.db_path)
+    try:
+        count = conn.execute(
+            "SELECT COUNT(*) as c FROM page_configs WHERE page_id = ?", (page_id,)
+        ).fetchone()["c"]
+    finally:
+        conn.close()
+    assert count == 1
+
+
+def test_put_config_menu_roundtrip(db_client):
+    """CONTENT-02: a two-item flat menu_json roundtrips in order."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-cfg-2", "Menu Page", "tok-cfg-2")
+
+    payload = {
+        "welcome_text": "Hi",
+        "menu_json": [
+            {"title": "First", "payload": "PAYLOAD_FIRST"},
+            {"title": "Second", "payload": "PAYLOAD_SECOND"},
+        ],
+    }
+    resp = client.put(
+        f"/pages/{page_id}/config", json=payload, headers=_auth_headers(token)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["menu_json"] == [
+        {"title": "First", "payload": "PAYLOAD_FIRST"},
+        {"title": "Second", "payload": "PAYLOAD_SECOND"},
+    ]
+
+
+def test_put_config_rejects_nested_menu(db_client):
+    """CONTENT-02/D-04: an extra key or nested object in a menu item returns 422."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-cfg-3", "Bad Menu Page", "tok-cfg-3")
+
+    payload_extra_key = {
+        "welcome_text": "Hi",
+        "menu_json": [{"title": "First", "payload": "P1", "children": []}],
+    }
+    resp1 = client.put(
+        f"/pages/{page_id}/config", json=payload_extra_key, headers=_auth_headers(token)
+    )
+    assert resp1.status_code == 422
+
+    payload_nested = {
+        "welcome_text": "Hi",
+        "menu_json": [{"title": "First", "payload": {"nested": "object"}}],
+    }
+    resp2 = client.put(
+        f"/pages/{page_id}/config", json=payload_nested, headers=_auth_headers(token)
+    )
+    assert resp2.status_code == 422
+
+
+def test_put_config_cross_tenant_404(db_client):
+    """T-13-04: tenant B PUTs to tenant A's page_id -> 404, no page_configs row created."""
+    client = db_client.client
+    admin_token = _login(client, db_client.super_admin_email, db_client.super_admin_password)
+    a = _create_client(client, admin_token, "cfg-tenant-a@test.local", "pw-a")
+    b = _create_client(client, admin_token, "cfg-tenant-b@test.local", "pw-b")
+    token_b = _login(client, "cfg-tenant-b@test.local", "pw-b")
+
+    page_id_a = _seed_page(db_client.db_path, a["id"], "fb-cfg-cross", "A's Page", "tok-a")
+
+    payload = {"welcome_text": "Hijack attempt", "menu_json": []}
+    resp = client.put(
+        f"/pages/{page_id_a}/config", json=payload, headers=_auth_headers(token_b)
+    )
+    assert resp.status_code == 404
+
+    conn = get_connection(db_client.db_path)
+    try:
+        row = conn.execute(
+            "SELECT id FROM page_configs WHERE page_id = ?", (page_id_a,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is None
+
+
+def test_put_config_unauthenticated_401(db_client):
+    """T-13-06: PUT with no Authorization header is rejected."""
+    client = db_client.client
+    client_id, _ = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-cfg-unauth", "Unauth Page", "tok-u")
+
+    payload = {"welcome_text": "Hi", "menu_json": []}
+    resp = client.put(f"/pages/{page_id}/config", json=payload)
+    assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Internal endpoint — GET /internal/pages/{page_fb_id}/config
+# ---------------------------------------------------------------------------
+
+def test_internal_config_forbidden_without_key(db_client):
+    """T-13-07: missing or wrong X-Internal-Key returns 403."""
+    client = db_client.client
+    client_id, _ = _make_client_token(db_client)
+    _seed_page(db_client.db_path, client_id, "fb-icfg-1", "Internal Config Page", "tok-i1")
+
+    r_missing = client.get("/internal/pages/fb-icfg-1/config")
+    assert r_missing.status_code == 403
+
+    r_wrong = client.get(
+        "/internal/pages/fb-icfg-1/config",
+        headers={"X-Internal-Key": "wrong-secret"},
+    )
+    assert r_wrong.status_code == 403
+
+
+def test_internal_config_returns_config(db_client):
+    """CONTENT-01/02/04: internal read returns the persisted config with parsed menu_json."""
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-icfg-2", "Internal Config Page 2", "tok-i2")
+
+    payload = {
+        "welcome_text": "Bot welcome",
+        "menu_json": [
+            {"title": "Cat A", "payload": "PAYLOAD_A"},
+            {"title": "Cat B", "payload": "PAYLOAD_B"},
+        ],
+        "escalation_psid": "psid-bot",
+        "escalation_message": "Escalating now",
+    }
+    put_resp = client.put(
+        f"/pages/{page_id}/config", json=payload, headers=_auth_headers(token)
+    )
+    assert put_resp.status_code == 200
+
+    resp = client.get(
+        "/internal/pages/fb-icfg-2/config",
+        headers={"X-Internal-Key": "test-internal-secret"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["welcome_text"] == "Bot welcome"
+    assert body["menu_json"] == [
+        {"title": "Cat A", "payload": "PAYLOAD_A"},
+        {"title": "Cat B", "payload": "PAYLOAD_B"},
+    ]
+    assert body["escalation_psid"] == "psid-bot"
+    assert body["escalation_message"] == "Escalating now"
+
+
+def test_internal_config_unknown_page_404(db_client):
+    """T-13-07: valid key but unknown page_fb_id returns 404."""
+    client = db_client.client
+    resp = client.get(
+        "/internal/pages/nonexistent-config-page/config",
+        headers={"X-Internal-Key": "test-internal-secret"},
+    )
+    assert resp.status_code == 404
+
+
+def test_internal_config_defaults_when_no_row(db_client):
+    """CONTENT-01/02/04: active page with no config row yet returns schema defaults."""
+    client = db_client.client
+    client_id, _ = _make_client_token(db_client)
+    _seed_page(db_client.db_path, client_id, "fb-icfg-nodefault", "No Config Yet", "tok-nd")
+
+    resp = client.get(
+        "/internal/pages/fb-icfg-nodefault/config",
+        headers={"X-Internal-Key": "test-internal-secret"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["welcome_text"] == ""
+    assert body["menu_json"] == []
+    assert body["escalation_psid"] is None
+    assert body["escalation_message"] is None
