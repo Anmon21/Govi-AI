@@ -101,3 +101,10 @@ None - no external service configuration required.
 ---
 *Phase: 13-page-config-q-a-api-content-migration*
 *Completed: 2026-08-10*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/13-page-config-q-a-api-content-migration/13-05-SUMMARY.md`
+- FOUND: commit `bcc0fa8` (Task 1 — regression tests)
+- FOUND: commit `195c5ce` (Task 2 — dependent-row guard fix)
+- FOUND: commit `8b41980` (this SUMMARY.md commit)
