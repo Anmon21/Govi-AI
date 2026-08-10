@@ -931,3 +931,137 @@ def test_qa_unauthenticated_401(db_client):
         f"/pages/{page_id}/qa", json={"type": "category", "title": "No auth"}
     )
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# CONTENT-03 — referential integrity regressions (13-REVIEW.md CR-01 / WR-01)
+# ---------------------------------------------------------------------------
+
+def test_qa_put_retype_referenced_category_400(db_client):
+    """CONTENT-03: reproduces 13-REVIEW.md CR-01.
+
+    PUT-ing a category to type="question" while another qa_items row on the
+    same page still points at it via category_id must be rejected with 400
+    and must leave the stored row unchanged.
+
+    Pre-fix (RED) behaviour: the PUT currently returns 200 — it fails at the
+    first assertion below, well before the state-based assertions.
+    """
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-qa-ref-put", "QA Ref Put Page", "tok-qa-ref-put")
+
+    resp_cat = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "category", "title": "Products"},
+        headers=_auth_headers(token),
+    )
+    assert resp_cat.status_code == 201
+    cat_id = resp_cat.json()["id"]
+
+    resp_q = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "question", "title": "Price?", "body": "10", "category_id": cat_id},
+        headers=_auth_headers(token),
+    )
+    assert resp_q.status_code == 201
+    q_id = resp_q.json()["id"]
+
+    resp_put = client.put(
+        f"/pages/{page_id}/qa/{cat_id}",
+        json={"type": "question", "title": "Products"},
+        headers=_auth_headers(token),
+    )
+    assert resp_put.status_code == 400
+    assert "referenced" in resp_put.json()["detail"]
+
+    resp_list = client.get(f"/pages/{page_id}/qa", headers=_auth_headers(token))
+    assert resp_list.status_code == 200
+    by_id = {item["id"]: item for item in resp_list.json()}
+    assert by_id[cat_id]["type"] == "category"
+    assert by_id[q_id]["category_id"] == cat_id
+
+    # Guard does not over-trigger on a category with no dependents.
+    resp_cat2 = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "category", "title": "Unused"},
+        headers=_auth_headers(token),
+    )
+    assert resp_cat2.status_code == 201
+    cat2_id = resp_cat2.json()["id"]
+
+    resp_put2 = client.put(
+        f"/pages/{page_id}/qa/{cat2_id}",
+        json={"type": "question", "title": "Unused"},
+        headers=_auth_headers(token),
+    )
+    assert resp_put2.status_code == 200
+    assert resp_put2.json()["type"] == "question"
+
+    # Guard is state-based, not sticky — once the last dependent is removed,
+    # the originally-blocked category becomes retypable.
+    resp_del_q = client.delete(f"/pages/{page_id}/qa/{q_id}", headers=_auth_headers(token))
+    assert resp_del_q.status_code == 200
+
+    resp_put3 = client.put(
+        f"/pages/{page_id}/qa/{cat_id}",
+        json={"type": "question", "title": "Products"},
+        headers=_auth_headers(token),
+    )
+    assert resp_put3.status_code == 200
+    assert resp_put3.json()["type"] == "question"
+
+
+def test_qa_delete_referenced_category_409(db_client):
+    """CONTENT-03: reproduces 13-REVIEW.md WR-01.
+
+    DELETE-ing a category that still has dependent questions on the same
+    page must return a clean 409 and delete nothing — never an unhandled
+    sqlite3.IntegrityError / 500.
+
+    Pre-fix (RED) behaviour: the DELETE currently raises sqlite3.IntegrityError
+    ("FOREIGN KEY constraint failed"), which TestClient re-raises out of the
+    request, so pytest reports this test as an ERROR rather than a failed
+    assertion. Either outcome counts as RED.
+    """
+    client = db_client.client
+    client_id, token = _make_client_token(db_client)
+    page_id = _seed_page(db_client.db_path, client_id, "fb-qa-ref-del", "QA Ref Del Page", "tok-qa-ref-del")
+
+    resp_cat = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "category", "title": "Products"},
+        headers=_auth_headers(token),
+    )
+    assert resp_cat.status_code == 201
+    cat_id = resp_cat.json()["id"]
+
+    resp_q = client.post(
+        f"/pages/{page_id}/qa",
+        json={"type": "question", "title": "Price?", "body": "10", "category_id": cat_id},
+        headers=_auth_headers(token),
+    )
+    assert resp_q.status_code == 201
+    q_id = resp_q.json()["id"]
+
+    resp_del = client.delete(f"/pages/{page_id}/qa/{cat_id}", headers=_auth_headers(token))
+    assert resp_del.status_code == 409
+    assert "questions" in resp_del.json()["detail"]
+
+    resp_list = client.get(f"/pages/{page_id}/qa", headers=_auth_headers(token))
+    assert resp_list.status_code == 200
+    ids = {item["id"] for item in resp_list.json()}
+    assert cat_id in ids
+    assert q_id in ids
+
+    # Guard releases once the dependency is gone.
+    resp_del_q = client.delete(f"/pages/{page_id}/qa/{q_id}", headers=_auth_headers(token))
+    assert resp_del_q.status_code == 200
+
+    resp_del_cat = client.delete(f"/pages/{page_id}/qa/{cat_id}", headers=_auth_headers(token))
+    assert resp_del_cat.status_code == 200
+
+    resp_list_after = client.get(f"/pages/{page_id}/qa", headers=_auth_headers(token))
+    assert resp_list_after.status_code == 200
+    ids_after = {item["id"] for item in resp_list_after.json()}
+    assert cat_id not in ids_after

@@ -395,6 +395,15 @@ def _validate_category_ref(conn, page_id: int, category_id: Optional[int]) -> No
         )
 
 
+def _has_dependent_qa_items(conn, page_id: int, item_id: int) -> bool:
+    """Report whether any row on this page references item_id as its category_id."""
+    row = conn.execute(
+        "SELECT 1 FROM qa_items WHERE category_id = ? AND page_id = ? LIMIT 1",
+        (item_id, page_id),
+    ).fetchone()
+    return bool(row)
+
+
 @router.get("/pages/{page_id}/qa", response_model=list[QAItemResponse])
 async def list_qa(
     page_id: int, current: dict = Depends(get_current_tenant)
@@ -504,6 +513,12 @@ async def update_qa(
             )
         _validate_category_ref(conn, page_id, request.category_id)
 
+        if request.type != "category" and _has_dependent_qa_items(conn, page_id, item_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change type: this category is referenced by questions",
+            )
+
         conn.execute(
             "UPDATE qa_items SET type = ?, title = ?, body = ?, category_id = ?, "
             "enabled = ? WHERE id = ? AND page_id = ?",
@@ -549,6 +564,12 @@ async def delete_qa(
     try:
         _require_owned_page(conn, page_id, tenant_id)
         _require_owned_qa_item(conn, page_id, item_id)
+
+        if _has_dependent_qa_items(conn, page_id, item_id):
+            raise HTTPException(
+                status_code=409,
+                detail="Category has questions; delete or reassign them first",
+            )
 
         conn.execute(
             "DELETE FROM qa_items WHERE id = ? AND page_id = ?", (item_id, page_id)

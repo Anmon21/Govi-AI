@@ -25,7 +25,7 @@
 
 - [ ] **CONTENT-01**: Client can edit the welcome/greeting text shown to users on Get Started for their Page
 - [ ] **CONTENT-02**: Client can edit the persistent menu labels and structure for their Page
-- [ ] **CONTENT-03**: Client can create, edit, and delete Q&A categories and answers for their Page (replaces Obsidian vault)
+- [x] **CONTENT-03**: Client can create, edit, and delete Q&A categories and answers for their Page (replaces Obsidian vault)
 - [ ] **CONTENT-04**: Client can edit escalation settings for their Page (admin PSID and handoff message)
 
 ### Database Foundation
@@ -77,7 +77,7 @@
 | PAGE-04 | Phase 12 | Pending |
 | CONTENT-01 | Phase 13 | Pending |
 | CONTENT-02 | Phase 13 | Pending |
-| CONTENT-03 | Phase 13 | Pending |
+| CONTENT-03 | Phase 13 | Complete |
 | CONTENT-04 | Phase 13 | Pending |
 | DB-02 | Phase 13 | Pending |
 | BOT-01 | Phase 14 | Pending |
