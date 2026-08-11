@@ -168,7 +168,7 @@ Plans:
 - [x] 13-05-PLAN.md — page-scoped dependent-row guard on update_qa (400) and delete_qa (409) closing 13-VERIFICATION.md truths #16/#17 (13-REVIEW.md CR-01/WR-01) — CONTENT-03
 
 **Wave 4** *(gap closure, blocked on 13-04)*
-- [ ] 13-06-PLAN.md — fail-closed guard in scripts/seed_qa.py refusing to wipe qa_items when the vault yields no items, closing 13-VERIFICATION.md truth #25 (13-REVIEW.md CR-01) — DB-02
+- [x] 13-06-PLAN.md — fail-closed guard in scripts/seed_qa.py refusing to wipe qa_items when the vault yields no items, closing 13-VERIFICATION.md truth #25 (13-REVIEW.md CR-01) — DB-02
 
 ### Phase 14: Bot Multi-Page Routing
 **Goal**: The bot handles webhook events from multiple Facebook Pages by fetching the correct token and content config per Page ID from FastAPI; the PAGE_ACCESS_TOKEN global is fully removed; per-page state is isolated
@@ -212,7 +212,7 @@ Plans:
 | 10. DB Foundation | v1.2 | 3/3 | Complete    | 2026-05-27 |
 | 11. Auth & Tenant Management API | v1.2 | 3/3 | Complete    | 2026-05-28 |
 | 12. Page Connection API + Facebook OAuth | v1.2 | 2/2 | Complete   | 2026-07-13 |
-| 13. Page Config, Q&A API + Content Migration | v1.2 | 5/5 | Complete   | 2026-08-10 |
+| 13. Page Config, Q&A API + Content Migration | v1.2 | 6/6 | Complete   | 2026-08-11 |
 | 14. Bot Multi-Page Routing | v1.2 | 0/? | Not started | - |
 | 15. Admin Panel UI | v1.2 | 0/? | Not started | - |
 
