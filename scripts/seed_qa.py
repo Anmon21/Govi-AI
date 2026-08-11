@@ -78,6 +78,10 @@ def seed(page_fb_id: str) -> None:
 
         items = load_vault_items()
 
+        if not items:
+            print(f"Refusing to seed: no valid vault items found under {settings.vault_path!r}. Existing content for {page_fb_id!r} left intact.")
+            sys.exit(1)
+
         conn.execute("DELETE FROM qa_items WHERE page_id = ?", (page_id,))
 
         category_map: dict[str, int] = {}
